@@ -11,6 +11,8 @@ import type {
 } from "../sdk/types"
 import BaseButton from "../ui/BaseButton.vue"
 import BaseCard from "../ui/BaseCard.vue"
+import FormField from "../ui/FormField.vue"
+import SectionHeader from "../ui/SectionHeader.vue"
 
 const sdk = new SmartFavoritesSDK()
 
@@ -180,13 +182,11 @@ async function applyRecommendation() {
     <div class="stack">
       <BaseCard>
         <div class="hero">
-          <div>
-            <div class="eyebrow">Smart Favorites AI</div>
-            <h1>AI 智能书签分类助手</h1>
-            <p>
-              优先推荐，不自动替你改结构。你确认后，插件才会移动或创建书签。
-            </p>
-          </div>
+          <SectionHeader
+            compact
+            eyebrow="Smart Favorites AI"
+            title="AI 智能书签分类助手"
+            subtitle="优先推荐，不自动替你改结构。你确认后，插件才会移动或创建书签。" />
           <BaseButton variant="primary" @click="refreshCapture"
             >重新抓取</BaseButton
           >
@@ -210,22 +210,20 @@ async function applyRecommendation() {
       </BaseCard>
 
       <BaseCard>
-        <strong>增强信息</strong>
-        <label class="label">
-          <div class="muted">手动标签，使用英文逗号分隔</div>
+        <SectionHeader compact title="增强信息" />
+        <FormField label="手动标签" hint="使用英文逗号分隔">
           <input
             v-model="manualTags"
             class="field"
             placeholder="例如：AI, 插件开发, 浏览器" />
-        </label>
-        <label class="label">
-          <div class="muted">补充备注</div>
+        </FormField>
+        <FormField label="补充备注">
           <textarea
             v-model="notes"
             class="field"
             rows="4"
             placeholder="这条书签为什么重要，后续会怎么用" />
-        </label>
+        </FormField>
       </BaseCard>
 
       <BaseCard>
@@ -262,10 +260,11 @@ async function applyRecommendation() {
             </div>
           </label>
 
-          <label v-if="selectedSuggestion?.type === 'create'" class="label">
-            <div class="muted">新建文件夹名称</div>
+          <FormField
+            v-if="selectedSuggestion?.type === 'create'"
+            label="新建文件夹名称">
             <input v-model="newFolderTitle" class="field" />
-          </label>
+          </FormField>
 
           <BaseButton
             :disabled="isLoading || !selectedSuggestion"
@@ -319,25 +318,10 @@ async function applyRecommendation() {
   gap: 12px;
 }
 
-.hero h1 {
-  margin: 6px 0 8px;
-  font-size: 22px;
-  line-height: 1.1;
-}
-
-.hero p,
 .muted {
   color: #627089;
   font-size: 12px;
   line-height: 1.5;
-}
-
-.eyebrow {
-  font-size: 11px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: #b26a00;
-  font-weight: 800;
 }
 
 .row {
@@ -357,11 +341,6 @@ async function applyRecommendation() {
 .break {
   word-break: break-all;
   margin-bottom: 10px;
-}
-
-.label {
-  display: block;
-  margin-top: 10px;
 }
 
 .field {

@@ -14,6 +14,9 @@ import type {
 } from "../sdk/types"
 import BaseButton from "../ui/BaseButton.vue"
 import BaseCard from "../ui/BaseCard.vue"
+import FormField from "../ui/FormField.vue"
+import SectionHeader from "../ui/SectionHeader.vue"
+import HistoryItemCard from "./HistoryItemCard.vue"
 
 const sdk = new SmartFavoritesSDK()
 
@@ -145,9 +148,8 @@ function switchTab(next: "settings" | "history") {
 
     <template v-else-if="tab === 'settings'">
       <BaseCard>
-        <h2>AI Provider</h2>
-        <label class="label">
-          接口基地址
+        <SectionHeader compact title="AI Provider" />
+        <FormField label="接口基地址">
           <input
             class="field"
             :value="settings.provider.baseUrl"
@@ -160,9 +162,8 @@ function switchTab(next: "settings" | "history") {
                 }
               })
             " />
-        </label>
-        <label class="label">
-          模型名称
+        </FormField>
+        <FormField label="模型名称">
           <input
             class="field"
             :value="settings.provider.model"
@@ -175,9 +176,8 @@ function switchTab(next: "settings" | "history") {
                 }
               })
             " />
-        </label>
-        <label class="label">
-          API Key
+        </FormField>
+        <FormField label="API Key">
           <input
             class="field"
             type="password"
@@ -191,13 +191,12 @@ function switchTab(next: "settings" | "history") {
                 }
               })
             " />
-        </label>
+        </FormField>
       </BaseCard>
 
       <BaseCard>
-        <h2>Prompt 模板</h2>
-        <label class="label">
-          System Prompt
+        <SectionHeader compact title="Prompt 模板" />
+        <FormField label="System Prompt">
           <textarea
             class="field"
             rows="6"
@@ -211,9 +210,8 @@ function switchTab(next: "settings" | "history") {
                 }
               })
             " />
-        </label>
-        <label class="label">
-          User Prompt Template
+        </FormField>
+        <FormField label="User Prompt Template">
           <textarea
             class="field"
             rows="12"
@@ -227,7 +225,7 @@ function switchTab(next: "settings" | "history") {
                 }
               })
             " />
-        </label>
+        </FormField>
         <BaseButton
           @click="
             updateSettings({
@@ -243,7 +241,7 @@ function switchTab(next: "settings" | "history") {
       </BaseCard>
 
       <BaseCard>
-        <h2>策略开关</h2>
+        <SectionHeader compact title="策略开关" />
         <label class="check-item"
           ><input
             type="checkbox"
@@ -303,7 +301,7 @@ function switchTab(next: "settings" | "history") {
     <template v-else>
       <BaseCard>
         <div class="row">
-          <h2>历史书签批量整理</h2>
+          <SectionHeader compact title="历史书签批量整理" />
           <div class="button-row">
             <BaseButton @click="refreshHistory">刷新推荐</BaseButton>
             <BaseButton variant="primary" @click="applySelected"
@@ -316,37 +314,12 @@ function switchTab(next: "settings" | "history") {
 
       <BaseCard>
         <div class="history-list">
-          <label
+          <HistoryItemCard
             v-for="item in historyItems"
             :key="item.bookmark.id"
-            class="history-item"
-            :class="{ selected: selectedIds.includes(item.bookmark.id) }">
-            <div class="history-main">
-              <input
-                type="checkbox"
-                :checked="selectedIds.includes(item.bookmark.id)"
-                @change="toggleSelected(item.bookmark.id)" />
-              <div>
-                <div class="item-title">{{ item.bookmark.title }}</div>
-                <div class="item-url">{{ item.bookmark.url }}</div>
-                <div class="item-path">
-                  当前目录：{{ item.bookmark.parentPath || "未识别" }}
-                </div>
-                <div class="target">
-                  <div class="item-title">推荐目标</div>
-                  <div>
-                    {{ item.recommendation.suggestions[0]?.path || "暂无推荐" }}
-                  </div>
-                  <div class="item-path">
-                    {{
-                      item.recommendation.suggestions[0]?.reason ||
-                      "当前没有生成推荐结果"
-                    }}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </label>
+            :checked="selectedIds.includes(item.bookmark.id)"
+            :item="item"
+            @toggle="toggleSelected" />
         </div>
       </BaseCard>
     </template>
@@ -399,15 +372,8 @@ function switchTab(next: "settings" | "history") {
   margin-top: 6px;
 }
 
-.label {
-  display: block;
-  margin-bottom: 16px;
-  color: #627089;
-}
-
 .field {
   width: 100%;
-  margin-top: 8px;
   padding: 12px 14px;
   border-radius: 14px;
   border: 1px solid #d7deea;
@@ -431,49 +397,5 @@ function switchTab(next: "settings" | "history") {
   display: flex;
   flex-direction: column;
   gap: 14px;
-}
-
-.history-item {
-  display: block;
-  border: 1px solid rgba(23, 32, 51, 0.08);
-  border-radius: 16px;
-  padding: 14px;
-  background: #fff;
-}
-
-.history-item.selected {
-  border-color: #ffb84d;
-  background: #fff8e8;
-}
-
-.history-main {
-  display: flex;
-  gap: 10px;
-}
-
-.item-title {
-  font-weight: 800;
-  margin-bottom: 6px;
-}
-
-.item-url {
-  font-size: 12px;
-  color: #627089;
-  margin-bottom: 8px;
-  word-break: break-all;
-}
-
-.item-path {
-  font-size: 12px;
-  color: #627089;
-  margin-bottom: 8px;
-}
-
-.target {
-  border-radius: 12px;
-  background: #f6f8fb;
-  padding: 10px;
-  font-size: 12px;
-  line-height: 1.6;
 }
 </style>
