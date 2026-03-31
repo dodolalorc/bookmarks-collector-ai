@@ -23,7 +23,7 @@ import type { App } from "vue"
 
 let initialized = false
 
-const ensureLibrary = () => {
+export const ensureFontAwesome = () => {
     if (initialized) {
         return
     }
@@ -52,6 +52,8 @@ const ensureLibrary = () => {
 }
 
 export const registerFontAwesome = (app: App) => {
-    ensureLibrary()
+    ensureFontAwesome()
     app.component("font-awesome-icon", FontAwesomeIcon)
 }
+
+export { FontAwesomeIcon }

@@ -8,6 +8,11 @@ import type {
   SmartFavoritesSettings
 } from "~/src/sdk/types"
 
+type SnippetAnalysisResult = {
+  summary: string
+  tags: string[]
+}
+
 function renderTemplate(
   template: string,
   input: RecommendationInput,
@@ -78,6 +83,107 @@ function parseJsonResponse(content: string) {
       reason?: string
     }>
   }
+}
+
+const heuristicSnippetAnalysis = (text: string): SnippetAnalysisResult => {
+  const normalized = text.replace(/\s+/g, " ").trim()
+  const sentenceMatch = normalized.match(/[^。！？!?\.]+[。！？!?\.]?/g) ?? []
+  const summary = sentenceMatch.slice(0, 3).join(" ").slice(0, 220)
+
+  const rawTokens = normalized
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .split(/\s+/)
+    .filter((token) => token.length >= 3)
+
+  const stopWords = new Set([
+    "this",
+    "that",
+    "with",
+    "from",
+    "have",
+    "will",
+    "about",
+    "your",
+    "their",
+    "would",
+    "could",
+    "should",
+    "https",
+    "http",
+    "www",
+    "com"
+  ])
+
+  const scores = new Map<string, number>()
+  rawTokens.forEach((token) => {
+    if (stopWords.has(token)) {
+      return
+    }
+    scores.set(token, (scores.get(token) ?? 0) + 1)
+  })
+
+  const tags = Array.from(scores.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([token]) => token)
+
+  return {
+    summary: summary || normalized.slice(0, 180),
+    tags
+  }
+}
+
+export const analyzeSnippetContent = async (
+  text: string,
+  settings: SmartFavoritesSettings
+): Promise<SnippetAnalysisResult> => {
+  if (
+    !settings.provider.apiKey ||
+    !settings.provider.baseUrl ||
+    !settings.provider.model
+  ) {
+    return heuristicSnippetAnalysis(text)
+  }
+
+  try {
+    const result = await generateText({
+      apiKey: settings.provider.apiKey,
+      baseURL: settings.provider.baseUrl,
+      model: settings.provider.model,
+      temperature: 0.2,
+      messages: [
+        {
+          role: "system",
+          content:
+            "你是网页内容分析助手。请输出 JSON：{summary: string, tags: string[]}，summary 用 2-3 句中文，tags 给 3-5 个关键词。"
+        },
+        {
+          role: "user",
+          content: `请分析这段文本：\n${text.slice(0, 2200)}`
+        }
+      ]
+    })
+
+    const parsed = parseJsonResponse(result.text || "") as {
+      summary?: string
+      tags?: string[]
+    }
+
+    const summary = parsed.summary?.trim()
+    const tags = (parsed.tags ?? []).filter(Boolean).slice(0, 5)
+
+    if (summary) {
+      return {
+        summary,
+        tags
+      }
+    }
+  } catch {
+    return heuristicSnippetAnalysis(text)
+  }
+
+  return heuristicSnippetAnalysis(text)
 }
 
 export async function extractAiRecommendations(

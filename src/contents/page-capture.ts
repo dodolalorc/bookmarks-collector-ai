@@ -97,6 +97,38 @@ const removeSnippet = async (snippetId: string) => {
   renderOverlay()
 }
 
+const analyzeSnippet = async (snippetId: string) => {
+  state.status = "正在分析该段内容…"
+  renderOverlay()
+
+  state.draft = await sendMessage<PageCaptureDraft>(
+    "smart-favorites/analyze-captured-snippet",
+    {
+      url: location.href,
+      snippetId
+    }
+  )
+
+  state.status = "已完成段落分析。"
+  renderOverlay()
+}
+
+const analyzeAllSnippets = async (force = false) => {
+  state.status = force ? "正在重新分析全部段落…" : "正在分析全部段落…"
+  renderOverlay()
+
+  state.draft = await sendMessage<PageCaptureDraft>(
+    "smart-favorites/analyze-all-captured-snippets",
+    {
+      url: location.href,
+      force
+    }
+  )
+
+  state.status = force ? "全部段落已重新分析。" : "全部段落已分析完成。"
+  renderOverlay()
+}
+
 const openExtensionPage = async (path: string) => {
   await sendMessage<{ success: boolean }>("smart-favorites/open-extension-page", {
     path
@@ -133,11 +165,20 @@ const renderOverlay = () => {
     onDeleteSnippet: (snippetId: string) => {
       void removeSnippet(snippetId).then(() => renderOverlay())
     },
+    onAnalyzeSnippet: (snippetId: string) => {
+      void analyzeSnippet(snippetId)
+    },
+    onAnalyzeAllSnippets: () => {
+      void analyzeAllSnippets(false)
+    },
+    onReanalyzeAllSnippets: () => {
+      void analyzeAllSnippets(true)
+    },
     onOpenOptions: () => {
-      void openExtensionPage("options.html")
+      void openExtensionPage("tabs/manage.html")
     },
     onOpenHistory: () => {
-      void openExtensionPage("options.html#history")
+      void openExtensionPage("tabs/manage.html#history")
     },
     onClassifyNow: () => {
       state.bookmarkPromptVisible = false
@@ -226,7 +267,6 @@ const bindElementPicker = () => {
 
       state.status = `已加入一个页面区域：${target.tagName.toLowerCase()}`
       state.sidebarOpen = true
-      state.elementPickMode = false
       state.bookmarkPromptVisible = false
       hideHighlight(highlight)
       renderOverlay()

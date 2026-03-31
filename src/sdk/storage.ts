@@ -117,6 +117,37 @@ export async function removeCapturedSnippet(url: string, snippetId: string) {
   return draftMap[url]
 }
 
+export async function updateCapturedSnippet(
+  url: string,
+  snippetId: string,
+  updater: (snippet: CapturedSnippet) => CapturedSnippet
+) {
+  const draftMap = await getDraftMap()
+  const current = draftMap[url]
+
+  if (!current) {
+    return {
+      url,
+      snippets: [],
+      updatedAt: new Date().toISOString()
+    }
+  }
+
+  draftMap[url] = {
+    url,
+    snippets: current.snippets.map((snippet) =>
+      snippet.id === snippetId ? updater(snippet) : snippet
+    ),
+    updatedAt: new Date().toISOString()
+  }
+
+  await chrome.storage.local.set({
+    [STORAGE_KEYS.drafts]: draftMap
+  })
+
+  return draftMap[url]
+}
+
 export async function clearCaptureDraft(url: string) {
   const draftMap = await getDraftMap()
   delete draftMap[url]

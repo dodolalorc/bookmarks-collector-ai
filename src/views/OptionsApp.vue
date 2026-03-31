@@ -119,6 +119,131 @@ const switchTab = (next: "settings" | "history") => {
   tab.value = next
   location.hash = next === "history" ? "#history" : ""
 }
+
+const readInputValue = (event: Event) => {
+  const target = event.target
+  return target instanceof HTMLInputElement ||
+    target instanceof HTMLTextAreaElement
+    ? target.value
+    : ""
+}
+
+const readCheckedValue = (event: Event) => {
+  const target = event.target
+  return target instanceof HTMLInputElement ? target.checked : false
+}
+
+const onBaseUrlInput = (event: Event) => {
+  if (!settings.value) {
+    return
+  }
+
+  updateSettings({
+    ...settings.value,
+    provider: {
+      ...settings.value.provider,
+      baseUrl: readInputValue(event)
+    }
+  })
+}
+
+const onModelInput = (event: Event) => {
+  if (!settings.value) {
+    return
+  }
+
+  updateSettings({
+    ...settings.value,
+    provider: {
+      ...settings.value.provider,
+      model: readInputValue(event)
+    }
+  })
+}
+
+const onApiKeyInput = (event: Event) => {
+  if (!settings.value) {
+    return
+  }
+
+  updateSettings({
+    ...settings.value,
+    provider: {
+      ...settings.value.provider,
+      apiKey: readInputValue(event)
+    }
+  })
+}
+
+const onSystemPromptInput = (event: Event) => {
+  if (!settings.value) {
+    return
+  }
+
+  updateSettings({
+    ...settings.value,
+    prompts: {
+      ...settings.value.prompts,
+      system: readInputValue(event)
+    }
+  })
+}
+
+const onTemplateInput = (event: Event) => {
+  if (!settings.value) {
+    return
+  }
+
+  updateSettings({
+    ...settings.value,
+    prompts: {
+      ...settings.value.prompts,
+      template: readInputValue(event)
+    }
+  })
+}
+
+const onAllowCreateFolderChange = (event: Event) => {
+  if (!settings.value) {
+    return
+  }
+
+  updateSettings({
+    ...settings.value,
+    behavior: {
+      ...settings.value.behavior,
+      allowCreateFolder: readCheckedValue(event)
+    }
+  })
+}
+
+const onPreferExistingFolderChange = (event: Event) => {
+  if (!settings.value) {
+    return
+  }
+
+  updateSettings({
+    ...settings.value,
+    behavior: {
+      ...settings.value.behavior,
+      preferExistingFolder: readCheckedValue(event)
+    }
+  })
+}
+
+const onStoreKnowledgeChange = (event: Event) => {
+  if (!settings.value) {
+    return
+  }
+
+  updateSettings({
+    ...settings.value,
+    behavior: {
+      ...settings.value.behavior,
+      storeKnowledge: readCheckedValue(event)
+    }
+  })
+}
 </script>
 
 <template>
@@ -155,44 +280,20 @@ const switchTab = (next: "settings" | "history") => {
           <input
             class="field"
             :value="settings.provider.baseUrl"
-            @input="
-              updateSettings({
-                ...settings,
-                provider: {
-                  ...settings.provider,
-                  baseUrl: ($event.target as HTMLInputElement).value
-                }
-              })
-            " />
+            @input="onBaseUrlInput" />
         </FormField>
         <FormField label="模型名称">
           <input
             class="field"
             :value="settings.provider.model"
-            @input="
-              updateSettings({
-                ...settings,
-                provider: {
-                  ...settings.provider,
-                  model: ($event.target as HTMLInputElement).value
-                }
-              })
-            " />
+            @input="onModelInput" />
         </FormField>
         <FormField label="API Key">
           <input
             class="field"
             type="password"
             :value="settings.provider.apiKey"
-            @input="
-              updateSettings({
-                ...settings,
-                provider: {
-                  ...settings.provider,
-                  apiKey: ($event.target as HTMLInputElement).value
-                }
-              })
-            " />
+            @input="onApiKeyInput" />
         </FormField>
       </BaseCard>
 
@@ -203,30 +304,14 @@ const switchTab = (next: "settings" | "history") => {
             class="field"
             rows="6"
             :value="settings.prompts.system"
-            @input="
-              updateSettings({
-                ...settings,
-                prompts: {
-                  ...settings.prompts,
-                  system: ($event.target as HTMLTextAreaElement).value
-                }
-              })
-            " />
+            @input="onSystemPromptInput" />
         </FormField>
         <FormField label="User Prompt Template">
           <textarea
             class="field"
             rows="12"
             :value="settings.prompts.template"
-            @input="
-              updateSettings({
-                ...settings,
-                prompts: {
-                  ...settings.prompts,
-                  template: ($event.target as HTMLTextAreaElement).value
-                }
-              })
-            " />
+            @input="onTemplateInput" />
         </FormField>
         <BaseButton
           @click="
@@ -249,29 +334,14 @@ const switchTab = (next: "settings" | "history") => {
           ><input
             type="checkbox"
             :checked="settings.behavior.allowCreateFolder"
-            @change="
-              updateSettings({
-                ...settings,
-                behavior: {
-                  ...settings.behavior,
-                  allowCreateFolder: ($event.target as HTMLInputElement).checked
-                }
-              })
-            " />允许推荐创建新文件夹</label
+            @change="onAllowCreateFolderChange" />允许推荐创建新文件夹</label
         >
         <label class="check-item"
           ><input
             type="checkbox"
             :checked="settings.behavior.preferExistingFolder"
             @change="
-              updateSettings({
-                ...settings,
-                behavior: {
-                  ...settings.behavior,
-                  preferExistingFolder: ($event.target as HTMLInputElement)
-                    .checked
-                }
-              })
+              onPreferExistingFolderChange
             " />优先推荐已有结构，降低新建文件夹频率</label
         >
         <label class="check-item"
@@ -279,13 +349,7 @@ const switchTab = (next: "settings" | "history") => {
             type="checkbox"
             :checked="settings.behavior.storeKnowledge"
             @change="
-              updateSettings({
-                ...settings,
-                behavior: {
-                  ...settings.behavior,
-                  storeKnowledge: ($event.target as HTMLInputElement).checked
-                }
-              })
+              onStoreKnowledgeChange
             " />保存页面摘要、标签和推荐结果到本地知识库</label
         >
       </BaseCard>

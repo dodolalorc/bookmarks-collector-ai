@@ -25,6 +25,9 @@ const emit = defineEmits<{
   captureSelection: []
   toggleElementMode: []
   deleteSnippet: [snippetId: string]
+  analyzeSnippet: [snippetId: string]
+  analyzeAllSnippets: []
+  reanalyzeAllSnippets: []
   openOptions: []
   openHistory: []
   classifyNow: []
@@ -85,7 +88,6 @@ const promptRight = computed(() =>
         </div>
         <button class="chip" @click="emit('toggleSidebar')">
           <font-awesome-icon icon="chevron-right" />
-          收起
         </button>
       </div>
       <div class="sidebar-status">{{ state.status }}</div>
@@ -98,6 +100,14 @@ const promptRight = computed(() =>
         <button class="chip" @click="emit('toggleElementMode')">
           <font-awesome-icon icon="vector-square" />
           {{ state.elementPickMode ? "退出框选模式" : "开启框选模式" }}
+        </button>
+        <button class="chip" @click="emit('analyzeAllSnippets')">
+          <font-awesome-icon icon="wand-magic-sparkles" />
+          分析全部
+        </button>
+        <button class="chip" @click="emit('reanalyzeAllSnippets')">
+          <font-awesome-icon icon="arrows-rotate" />
+          重新分析
         </button>
       </div>
 
@@ -116,6 +126,7 @@ const promptRight = computed(() =>
           v-for="snippet in state.draft.snippets"
           :key="snippet.id"
           :snippet="snippet"
+          @analyze="emit('analyzeSnippet', $event)"
           @delete="emit('deleteSnippet', $event)" />
       </div>
 
@@ -124,11 +135,11 @@ const promptRight = computed(() =>
         <div class="footer-actions">
           <button class="chip" @click="emit('openOptions')">
             <font-awesome-icon icon="gear" />
-            模型配置
+            模型
           </button>
           <button class="chip" @click="emit('openHistory')">
             <font-awesome-icon icon="bookmark" />
-            书签整理
+            书签
           </button>
         </div>
       </div>

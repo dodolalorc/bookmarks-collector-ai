@@ -6,7 +6,10 @@ import {
   listBookmarks
 } from "~/src/sdk/bookmarks"
 import { recommendFolders } from "~/src/sdk/folder-recommender"
-import { extractAiRecommendations } from "~/src/sdk/provider"
+import {
+  analyzeSnippetContent,
+  extractAiRecommendations
+} from "~/src/sdk/provider"
 import {
   addCapturedSnippet,
   clearCaptureDraft,
@@ -14,7 +17,8 @@ import {
   getSettings,
   pushKnowledgeRecord,
   removeCapturedSnippet,
-  saveSettings
+  saveSettings,
+  updateCapturedSnippet
 } from "~/src/sdk/storage"
 import type {
   ApplyBookmarkPayload,
@@ -79,6 +83,20 @@ async function handleMessage(message: { type: string; payload?: unknown }) {
         message.payload as {
           url: string
           snippetId: string
+        }
+      )
+    case "smart-favorites/analyze-captured-snippet":
+      return handleAnalyzeCapturedSnippet(
+        message.payload as {
+          url: string
+          snippetId: string
+        }
+      )
+    case "smart-favorites/analyze-all-captured-snippets":
+      return handleAnalyzeAllCapturedSnippets(
+        message.payload as {
+          url: string
+          force?: boolean
         }
       )
     case "smart-favorites/clear-capture-draft":
@@ -219,9 +237,92 @@ async function handleApplyBulkBookmarks(
 }
 
 async function handleOpenExtensionPage(payload: ExtensionPageOpenPayload) {
-  const url = chrome.runtime.getURL(payload.path)
+  const normalizedPath = payload.path?.trim()
+
+  if (!normalizedPath) {
+    throw new Error("页面路径不能为空")
+  }
+
+  if (normalizedPath === "internal://model") {
+    await chrome.tabs.create({ url: chrome.runtime.getURL("tabs/manage.html") })
+    return { success: true }
+  }
+
+  if (normalizedPath === "internal://bookmarks") {
+    await chrome.tabs.create({
+      url: chrome.runtime.getURL("tabs/manage.html#history")
+    })
+    return { success: true }
+  }
+
+  if (normalizedPath.startsWith("options.html")) {
+    const optionsUrl = chrome.runtime.getURL(normalizedPath)
+
+    if (normalizedPath === "options.html") {
+      try {
+        await chrome.runtime.openOptionsPage()
+        return { success: true }
+      } catch {
+        await chrome.tabs.create({ url: optionsUrl })
+        return { success: true }
+      }
+    }
+
+    await chrome.tabs.create({ url: optionsUrl })
+    return { success: true }
+  }
+
+  const url = chrome.runtime.getURL(normalizedPath)
   await chrome.tabs.create({ url })
   return { success: true }
+}
+
+async function handleAnalyzeCapturedSnippet(payload: {
+  url: string
+  snippetId: string
+}): Promise<PageCaptureDraft> {
+  const draft = await getCaptureDraft(payload.url)
+  const target = draft.snippets.find((snippet) => snippet.id === payload.snippetId)
+
+  if (!target) {
+    return draft
+  }
+
+  const settings = await getSettings()
+  const analysis = await analyzeSnippetContent(target.text, settings)
+
+  return updateCapturedSnippet(payload.url, payload.snippetId, (snippet) => ({
+    ...snippet,
+    analysisSummary: analysis.summary,
+    analysisTags: analysis.tags,
+    analysisUpdatedAt: new Date().toISOString()
+  }))
+}
+
+async function handleAnalyzeAllCapturedSnippets(payload: {
+  url: string
+  force?: boolean
+}): Promise<PageCaptureDraft> {
+  const draft = await getCaptureDraft(payload.url)
+  const settings = await getSettings()
+
+  let nextDraft = draft
+
+  for (const snippet of draft.snippets) {
+    if (!payload.force && snippet.analysisSummary && snippet.analysisTags?.length) {
+      continue
+    }
+
+    const analysis = await analyzeSnippetContent(snippet.text, settings)
+    nextDraft = await updateCapturedSnippet(payload.url, snippet.id, (current) => ({
+      ...current,
+      analysisSummary: analysis.summary,
+      analysisTags: analysis.tags,
+      analysisUpdatedAt: new Date().toISOString()
+    }))
+  }
+
+  return nextDraft
 }
 
 async function notifyBookmarkCreated(url: string) {

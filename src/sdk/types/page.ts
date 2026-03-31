@@ -23,6 +23,9 @@ export interface CapturedSnippet {
     label: string
     selector?: string
     createdAt: string
+    analysisSummary?: string
+    analysisTags?: string[]
+    analysisUpdatedAt?: string
 }
 
 export interface PageCaptureDraft {
