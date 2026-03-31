@@ -13,6 +13,9 @@ import BaseButton from "../ui/BaseButton.vue"
 import BaseCard from "../ui/BaseCard.vue"
 import FormField from "../ui/FormField.vue"
 import SectionHeader from "../ui/SectionHeader.vue"
+import SuggestionCard from "./SuggestionCard.vue"
+
+const QUICK_CAPTURE_FOLDER = "待整理"
 
 const sdk = new SmartFavoritesSDK()
 
@@ -34,6 +37,20 @@ const selectedSuggestion = computed(() =>
   )
 )
 
+const quickFacts = computed(() => {
+  if (!capture.value?.page) {
+    return []
+  }
+
+  const page = capture.value.page
+  return [
+    { label: "标题", value: page.title || "未识别" },
+    { label: "作者", value: page.author || "未识别" },
+    { label: "站点", value: page.siteName || page.domain || "未识别" },
+    { label: "域名", value: page.domain || "未识别" }
+  ]
+})
+
 const pageSummary = computed(() => {
   if (!capture.value?.page) {
     return "没有可分析的页面信息。"
@@ -54,7 +71,13 @@ onMounted(() => {
   void bootstrap()
 })
 
-async function bootstrap() {
+const parseTags = () =>
+  manualTags.value
+    .split(",")
+    .map((tag) => tag.trim())
+    .filter(Boolean)
+
+const bootstrap = async () => {
   isLoading.value = true
   status.value = "正在读取插件配置和当前页面…"
 
@@ -77,7 +100,7 @@ async function bootstrap() {
   }
 }
 
-async function refreshCapture() {
+const refreshCapture = async () => {
   isLoading.value = true
   status.value = "正在重新抓取当前页内容…"
 
@@ -93,7 +116,7 @@ async function refreshCapture() {
   }
 }
 
-async function runRecommendation() {
+const runRecommendation = async () => {
   if (!capture.value?.page.url) {
     status.value = "当前没有可用于分析的网址。"
     return
@@ -107,10 +130,7 @@ async function runRecommendation() {
       page: capture.value.page,
       notes: notes.value,
       selectedText: capture.value.selectionText,
-      tags: manualTags.value
-        .split(",")
-        .map((tag) => tag.trim())
-        .filter(Boolean)
+      tags: parseTags()
     }
 
     const nextRecommendation = await sdk.recommendFolders(payload)
@@ -136,7 +156,7 @@ async function runRecommendation() {
   }
 }
 
-async function applyRecommendation() {
+const applyRecommendation = async () => {
   if (!capture.value?.page.url || !selectedSuggestion.value) {
     status.value = "请先完成推荐并选择目标收藏夹。"
     return
@@ -152,10 +172,7 @@ async function applyRecommendation() {
         page: capture.value.page,
         notes: notes.value,
         selectedText: capture.value.selectionText,
-        tags: manualTags.value
-          .split(",")
-          .map((tag) => tag.trim())
-          .filter(Boolean)
+        tags: parseTags()
       },
       recommendation: {
         ...selectedSuggestion.value,
@@ -175,6 +192,49 @@ async function applyRecommendation() {
     isLoading.value = false
   }
 }
+
+const quickCapture = async () => {
+  if (!capture.value?.page.url) {
+    status.value = "当前没有可用于抓取的网址。"
+    return
+  }
+
+  isLoading.value = true
+  status.value = "正在执行一键抓取…"
+
+  try {
+    const page = capture.value.page
+    const derivedTags = [page.domain, page.siteName, page.author]
+      .filter(Boolean)
+      .slice(0, 3) as string[]
+
+    const mutation = await sdk.applyBookmarkRecommendation({
+      page,
+      input: {
+        page,
+        notes: `一键抓取：${page.title}`,
+        selectedText: capture.value.selectionText,
+        tags: [...parseTags(), ...derivedTags].slice(0, 6)
+      },
+      recommendation: {
+        key: `create:${QUICK_CAPTURE_FOLDER}`,
+        type: "create",
+        title: QUICK_CAPTURE_FOLDER,
+        path: `新建 / ${QUICK_CAPTURE_FOLDER}`,
+        score: 0.5,
+        reason: "一键抓取按标题/作者/站点做快速归档"
+      }
+    })
+
+    result.value = mutation
+    status.value = `已一键抓取到「${QUICK_CAPTURE_FOLDER}」。`
+  } catch (error) {
+    status.value =
+      error instanceof Error ? error.message : "一键抓取失败，请稍后再试。"
+  } finally {
+    isLoading.value = false
+  }
+}
 </script>
 
 <template>
@@ -187,10 +247,30 @@ async function applyRecommendation() {
             eyebrow="Smart Favorites AI"
             title="AI 智能书签分类助手"
             subtitle="优先推荐，不自动替你改结构。你确认后，插件才会移动或创建书签。" />
-          <BaseButton variant="primary" @click="refreshCapture"
-            >重新抓取</BaseButton
-          >
+          <BaseButton variant="primary" @click="refreshCapture">
+            <i class="fa-solid fa-rotate-right" aria-hidden="true" />
+            重新抓取
+          </BaseButton>
         </div>
+      </BaseCard>
+
+      <BaseCard>
+        <SectionHeader compact title="默认抓取分类" />
+        <div class="quick-facts">
+          <div
+            v-for="fact in quickFacts"
+            :key="fact.label"
+            class="quick-fact-item">
+            <span class="quick-fact-label">{{ fact.label }}</span>
+            <span class="quick-fact-value">{{ fact.value }}</span>
+          </div>
+        </div>
+        <BaseButton
+          :disabled="isLoading || !capture?.page.url"
+          @click="quickCapture">
+          <i class="fa-solid fa-bolt" aria-hidden="true" />
+          一键抓取
+        </BaseButton>
       </BaseCard>
 
       <BaseCard>
@@ -232,33 +312,19 @@ async function applyRecommendation() {
           <BaseButton
             :disabled="!canRecommend || isLoading"
             variant="accent"
-            @click="runRecommendation"
-            >开始推荐</BaseButton
-          >
+            @click="runRecommendation">
+            <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true" />
+            开始推荐
+          </BaseButton>
         </div>
 
         <div v-if="recommendation" class="suggestions">
-          <label
+          <SuggestionCard
             v-for="item in recommendation.suggestions"
             :key="item.key"
-            class="suggestion"
-            :class="{ active: item.key === selectedTarget }">
-            <input
-              v-model="selectedTarget"
-              :value="item.key"
-              name="suggestion"
-              type="radio" />
-            <div class="content">
-              <div class="row">
-                <strong>{{ item.title }}</strong>
-                <span class="muted">{{
-                  item.type === "create" ? "建议新建" : "现有文件夹"
-                }}</span>
-              </div>
-              <div class="muted">{{ item.path }}</div>
-              <div class="reason">{{ item.reason }}</div>
-            </div>
-          </label>
+            :selected="item.key === selectedTarget"
+            :suggestion="item"
+            @select="selectedTarget = $event" />
 
           <FormField
             v-if="selectedSuggestion?.type === 'create'"
@@ -269,9 +335,10 @@ async function applyRecommendation() {
           <BaseButton
             :disabled="isLoading || !selectedSuggestion"
             variant="primary"
-            @click="applyRecommendation"
-            >确认并写入书签</BaseButton
-          >
+            @click="applyRecommendation">
+            <i class="fa-solid fa-folder-tree" aria-hidden="true" />
+            确认并写入书签
+          </BaseButton>
         </div>
         <div v-else class="muted">
           点击“开始推荐”后，系统会结合当前页面、你的备注和现有书签结构生成候选文件夹。
@@ -291,8 +358,8 @@ async function applyRecommendation() {
 
 <style scoped>
 .panel {
-  width: 420px;
-  min-height: 640px;
+  width: 460px;
+  min-height: 700px;
   padding: 18px;
   background: radial-gradient(
     circle at top left,
@@ -320,8 +387,37 @@ async function applyRecommendation() {
 
 .muted {
   color: #627089;
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.5;
+}
+
+.quick-facts {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.quick-fact-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #e6edf6;
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: #fafcff;
+}
+
+.quick-fact-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: #4c5a76;
+}
+
+.quick-fact-value {
+  font-size: 13px;
+  color: #1f2d46;
 }
 
 .row {
@@ -333,7 +429,7 @@ async function applyRecommendation() {
 }
 
 .title {
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 700;
   margin-bottom: 6px;
 }
@@ -350,7 +446,7 @@ async function applyRecommendation() {
   border: 1px solid #cfd8e3;
   background: #fff;
   box-sizing: border-box;
-  font-size: 13px;
+  font-size: 14px;
   color: #172033;
   resize: vertical;
   margin-top: 6px;
@@ -362,32 +458,8 @@ async function applyRecommendation() {
   gap: 10px;
 }
 
-.suggestion {
-  border: 1px solid rgba(23, 32, 51, 0.08);
-  background: #fff;
-  border-radius: 14px;
-  padding: 12px;
-  display: flex;
-  gap: 10px;
-}
-
-.suggestion.active {
-  border-color: #ffb84d;
-  background: #fff6df;
-}
-
-.content {
-  flex: 1;
-}
-
-.reason {
-  font-size: 12px;
-  margin-top: 8px;
-  line-height: 1.5;
-}
-
 .status {
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.6;
   margin-top: 8px;
 }

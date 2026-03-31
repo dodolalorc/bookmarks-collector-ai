@@ -1,24 +1,33 @@
 import type { PlasmoCSConfig } from "plasmo"
 import { createApp, reactive } from "vue"
+import "@fortawesome/fontawesome-free/css/all.min.css"
 
 import type {
   CapturedSnippet,
   CapturePageResponse,
-  PageCaptureDraft,
-  PageContext
+  PageCaptureDraft
 } from "../sdk/types"
+import {
+  ROOT_ID,
+  ensureCaptureStyles,
+  ensureHighlightBox,
+  ensureOverlayRoot,
+  hideHighlight,
+  updateHighlightRect
+} from "./capture/dom"
+import {
+  createSnippet,
+  cssPathFor,
+  getCurrentSelectionText,
+  getPageContext
+} from "./capture/extract"
 import PageCaptureOverlay from "./PageCaptureOverlay.vue"
-const ROOT_ID = "smart-favorites-overlay-root"
-const HIGHLIGHT_ID = "smart-favorites-highlight-box"
-const SIDEBAR_WIDTH = 348
-const PAGE_INSET_TRANSITION = "margin-right 220ms ease"
 
-const originalPageLayout = {
-  htmlMarginRight: document.documentElement.style.marginRight,
-  htmlTransition: document.documentElement.style.transition,
-  bodyMarginRight: document.body?.style.marginRight ?? "",
-  bodyTransition: document.body?.style.transition ?? ""
+export const config: PlasmoCSConfig = {
+  matches: ["<all_urls>"]
 }
+
+const SIDEBAR_WIDTH = 348
 
 type OverlayState = {
   draft: PageCaptureDraft
@@ -44,78 +53,7 @@ const state = reactive<OverlayState>({
 
 let overlayMounted = false
 
-function createSnippet(
-  mode: "selection" | "element",
-  text: string,
-  label: string,
-  selector?: string
-): CapturedSnippet {
-  return {
-    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    mode,
-    text,
-    label,
-    selector,
-    createdAt: new Date().toISOString()
-  }
-}
-
-function getPageContext(): PageContext {
-  const title = document.title?.trim() || location.hostname
-  const description =
-    document
-      .querySelector('meta[name="description"]')
-      ?.getAttribute("content")
-      ?.trim() ?? ""
-
-  const headings = Array.from(document.querySelectorAll("h1, h2, h3"))
-    .map((element) => element.textContent?.trim() ?? "")
-    .filter(Boolean)
-    .slice(0, 8)
-
-  const paragraphs = Array.from(document.querySelectorAll("p, article p, main p"))
-    .map((element) => element.textContent?.replace(/\s+/g, " ").trim() ?? "")
-    .filter((text) => text.length > 40)
-    .slice(0, 6)
-
-  return {
-    title,
-    url: location.href,
-    domain: location.hostname,
-    description,
-    summary: [description, ...headings, ...paragraphs]
-      .filter(Boolean)
-      .join("\n")
-      .slice(0, 2200)
-  }
-}
-
-function cssPathFor(element: Element) {
-  const segments: string[] = []
-  let current: Element | null = element
-
-  while (current && segments.length < 5) {
-    const tag = current.tagName.toLowerCase()
-    if (current.id) {
-      segments.unshift(`${tag}#${current.id}`)
-      break
-    }
-
-    const siblings = current.parentElement
-      ? Array.from(current.parentElement.children).filter(
-        (item) => item.tagName === current.tagName
-      )
-      : []
-    const index =
-      siblings.length > 1 ? `:nth-of-type(${siblings.indexOf(current) + 1})` : ""
-    segments.unshift(`${tag}${index}`)
-    current = current.parentElement
-  }
-
-  return segments.join(" > ")
-}
-
-async function sendMessage<T>(type: string, payload?: unknown) {
+const sendMessage = async <T>(type: string, payload?: unknown) => {
   const response = await chrome.runtime.sendMessage({
     type,
     payload
@@ -128,7 +66,7 @@ async function sendMessage<T>(type: string, payload?: unknown) {
   return response.payload as T
 }
 
-async function fetchDraft() {
+const fetchDraft = async () => {
   state.draft = await sendMessage<PageCaptureDraft>(
     "smart-favorites/get-capture-draft",
     location.href
@@ -136,7 +74,7 @@ async function fetchDraft() {
   renderOverlay()
 }
 
-async function storeSnippet(snippet: CapturedSnippet) {
+const storeSnippet = async (snippet: CapturedSnippet) => {
   state.draft = await sendMessage<PageCaptureDraft>(
     "smart-favorites/add-captured-snippet",
     {
@@ -147,7 +85,7 @@ async function storeSnippet(snippet: CapturedSnippet) {
   renderOverlay()
 }
 
-async function removeSnippet(snippetId: string) {
+const removeSnippet = async (snippetId: string) => {
   state.draft = await sendMessage<PageCaptureDraft>(
     "smart-favorites/remove-captured-snippet",
     {
@@ -158,77 +96,14 @@ async function removeSnippet(snippetId: string) {
   renderOverlay()
 }
 
-async function openExtensionPage(path: string) {
+const openExtensionPage = async (path: string) => {
   await sendMessage<{ success: boolean }>("smart-favorites/open-extension-page", {
     path
   })
 }
 
-function ensureHighlightBox() {
-  let box = document.getElementById(HIGHLIGHT_ID)
-
-  if (!box) {
-    box = document.createElement("div")
-    box.id = HIGHLIGHT_ID
-    Object.assign(box.style, {
-      position: "absolute",
-      pointerEvents: "none",
-      border: "1.5px solid #ff7ed9",
-      background: "rgba(128, 216, 255, 0.16)",
-      boxShadow: "0 0 0 1px rgba(255,255,255,0.65) inset",
-      zIndex: "2147483645",
-      display: "none",
-      borderRadius: "10px"
-    })
-    document.documentElement.appendChild(box)
-  }
-
-  return box
-}
-
-function currentSelectionText() {
-  return window.getSelection?.()?.toString().trim() ?? ""
-}
-
-function rootElement() {
-  let root = document.getElementById(ROOT_ID)
-
-  if (!root) {
-    root = document.createElement("div")
-    root.id = ROOT_ID
-    document.documentElement.appendChild(root)
-  }
-
-  return root
-}
-
-function syncPageInset() {
-  if (state.sidebarOpen) {
-    const inset = `${SIDEBAR_WIDTH}px`
-    document.documentElement.style.transition = PAGE_INSET_TRANSITION
-    document.documentElement.style.marginRight = inset
-
-    if (document.body) {
-      document.body.style.transition = PAGE_INSET_TRANSITION
-      document.body.style.marginRight = inset
-    }
-
-    return
-  }
-
-  document.documentElement.style.marginRight = originalPageLayout.htmlMarginRight
-  document.documentElement.style.transition = originalPageLayout.htmlTransition
-
-  if (document.body) {
-    document.body.style.marginRight = originalPageLayout.bodyMarginRight
-    document.body.style.transition = originalPageLayout.bodyTransition
-  }
-}
-
-function renderOverlay() {
-  state.selectionText = currentSelectionText()
-
-  syncPageInset()
+const renderOverlay = () => {
+  state.selectionText = getCurrentSelectionText()
 
   if (overlayMounted) {
     return
@@ -273,11 +148,11 @@ function renderOverlay() {
       state.bookmarkPromptVisible = false
       renderOverlay()
     }
-  }).mount(rootElement())
+  }).mount(ensureOverlayRoot())
 }
 
-async function captureSelection() {
-  const text = currentSelectionText()
+const captureSelection = async () => {
+  const text = getCurrentSelectionText()
 
   if (text.length < 2) {
     state.status = "先在页面中选中一段文字。"
@@ -291,29 +166,25 @@ async function captureSelection() {
   renderOverlay()
 }
 
-function bindElementPicker() {
-  const highlight = ensureHighlightBox()
+const bindElementPicker = () => {
+  const highlight = ensureHighlightBox() as HTMLElement
 
   document.addEventListener(
     "mousemove",
     (event) => {
       if (!state.elementPickMode) {
-        highlight.style.display = "none"
+        hideHighlight(highlight)
         return
       }
 
       const target = event.target
       if (!(target instanceof Element) || target.closest(`#${ROOT_ID}`)) {
-        highlight.style.display = "none"
+        hideHighlight(highlight)
         return
       }
 
       const rect = target.getBoundingClientRect()
-      highlight.style.display = "block"
-      highlight.style.left = `${rect.left + window.scrollX}px`
-      highlight.style.top = `${rect.top + window.scrollY}px`
-      highlight.style.width = `${rect.width}px`
-      highlight.style.height = `${rect.height}px`
+      updateHighlightRect(highlight, rect, window.scrollX, window.scrollY)
     },
     true
   )
@@ -353,16 +224,18 @@ function bindElementPicker() {
       state.sidebarOpen = true
       state.elementPickMode = false
       state.bookmarkPromptVisible = false
-      highlight.style.display = "none"
+      hideHighlight(highlight)
       renderOverlay()
     },
     true
   )
 }
 
+ensureCaptureStyles()
+
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message?.type === "smart-favorites/capture-page") {
-    state.selectionText = currentSelectionText()
+    state.selectionText = getCurrentSelectionText()
     sendResponse({
       page: getPageContext(),
       selectionText: state.selectionText,

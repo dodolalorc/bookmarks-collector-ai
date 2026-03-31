@@ -54,9 +54,11 @@ const promptRight = computed(() =>
       <div class="prompt-text">要不要现在整理标签并补充当前页的小知识点？</div>
       <div class="prompt-actions">
         <button class="chip chip-gradient" @click="emit('classifyNow')">
+          <i class="fa-solid fa-bolt" aria-hidden="true" />
           立即分类标签
         </button>
         <button class="chip" @click="emit('dismissBookmarkPrompt')">
+          <i class="fa-solid fa-clock" aria-hidden="true" />
           稍后
         </button>
       </div>
@@ -66,7 +68,9 @@ const promptRight = computed(() =>
       class="floating-ball"
       :style="{ right: floatingButtonRight }"
       title="切换页面知识侧边栏"
-      @click="emit('toggleSidebar')" />
+      @click="emit('toggleSidebar')">
+      <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true" />
+    </button>
 
     <aside
       class="sidebar"
@@ -79,15 +83,20 @@ const promptRight = computed(() =>
             统一收集当前书签页下的小知识点，不做分类拆分。
           </div>
         </div>
-        <button class="chip" @click="emit('toggleSidebar')">收起</button>
+        <button class="chip" @click="emit('toggleSidebar')">
+          <i class="fa-solid fa-chevron-right" aria-hidden="true" />
+          收起
+        </button>
       </div>
       <div class="sidebar-status">{{ state.status }}</div>
 
       <div class="toolbar">
         <button class="chip chip-gradient" @click="emit('captureSelection')">
+          <i class="fa-solid fa-highlighter" aria-hidden="true" />
           抓取当前选中
         </button>
         <button class="chip" @click="emit('toggleElementMode')">
+          <i class="fa-solid fa-vector-square" aria-hidden="true" />
           {{ state.elementPickMode ? "退出框选模式" : "开启框选模式" }}
         </button>
       </div>
@@ -113,8 +122,14 @@ const promptRight = computed(() =>
       <div class="sidebar-footer">
         <div class="footer-text">模型配置和书签整理保留在管理页中</div>
         <div class="footer-actions">
-          <button class="chip" @click="emit('openOptions')">模型配置</button>
-          <button class="chip" @click="emit('openHistory')">书签整理</button>
+          <button class="chip" @click="emit('openOptions')">
+            <i class="fa-solid fa-gear" aria-hidden="true" />
+            模型配置
+          </button>
+          <button class="chip" @click="emit('openHistory')">
+            <i class="fa-solid fa-bookmark" aria-hidden="true" />
+            书签整理
+          </button>
         </div>
       </div>
     </aside>
@@ -123,12 +138,23 @@ const promptRight = computed(() =>
 
 <style scoped>
 .overlay-root {
+  all: initial;
   position: fixed;
   inset: 0;
   pointer-events: none;
   z-index: 2147483646;
   font-family: "SF Pro Text", "Segoe UI", "PingFang SC", "Hiragino Sans GB",
     sans-serif;
+  font-size: 14px;
+}
+
+.overlay-root,
+.overlay-root * {
+  box-sizing: border-box;
+}
+
+.overlay-root button {
+  font: inherit;
 }
 
 .prompt {
@@ -144,14 +170,14 @@ const promptRight = computed(() =>
 }
 
 .prompt-title {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 800;
   color: #2b3962;
   margin-bottom: 6px;
 }
 
 .prompt-text {
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.6;
   color: #6d7994;
   margin-bottom: 10px;
@@ -164,11 +190,24 @@ const promptRight = computed(() =>
 }
 
 .floating-ball {
+  --ball-size: 32px;
   position: fixed;
   top: 84px;
   pointer-events: auto;
-  width: 28px;
-  height: 28px;
+  width: var(--ball-size);
+  min-width: var(--ball-size);
+  max-width: var(--ball-size);
+  height: var(--ball-size);
+  min-height: var(--ball-size);
+  max-height: var(--ball-size);
+  aspect-ratio: 1 / 1;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  appearance: none;
+  -webkit-appearance: none;
+  line-height: 1;
   border-radius: 50%;
   border: 2px solid rgba(255, 255, 255, 0.96);
   outline: 1px solid rgba(74, 107, 164, 0.52);
@@ -221,7 +260,7 @@ const promptRight = computed(() =>
 }
 
 .sidebar-eyebrow {
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: #7d88b1;
@@ -237,7 +276,7 @@ const promptRight = computed(() =>
 }
 
 .sidebar-subtitle {
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.6;
   color: #6e7997;
   margin-top: 8px;
@@ -245,7 +284,7 @@ const promptRight = computed(() =>
 
 .sidebar-status {
   padding: 12px 18px 0;
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.6;
   color: #65728f;
 }
@@ -260,12 +299,15 @@ const promptRight = computed(() =>
 .chip {
   border: 0;
   border-radius: 999px;
-  padding: 8px 11px;
+  padding: 9px 12px;
   background: #eef4ff;
   color: #657899;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .chip-gradient {
@@ -282,7 +324,7 @@ const promptRight = computed(() =>
 }
 
 .selection-label {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -291,7 +333,7 @@ const promptRight = computed(() =>
 }
 
 .selection-text {
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.65;
   color: #31415f;
 }
@@ -310,7 +352,7 @@ const promptRight = computed(() =>
   padding: 16px;
   background: rgba(255, 255, 255, 0.7);
   border: 1px dashed rgba(126, 169, 220, 0.28);
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.7;
   color: #72809e;
 }
@@ -325,7 +367,7 @@ const promptRight = computed(() =>
 }
 
 .footer-text {
-  font-size: 11px;
+  font-size: 12px;
   color: #8591ac;
 }
 </style>

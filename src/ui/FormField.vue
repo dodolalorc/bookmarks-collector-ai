@@ -21,14 +21,14 @@ defineProps<{
 
 .form-label {
   color: #44506a;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
   margin-bottom: 6px;
 }
 
 .form-hint {
   color: #627089;
-  font-size: 12px;
+  font-size: 13px;
   margin-bottom: 6px;
   line-height: 1.5;
 }

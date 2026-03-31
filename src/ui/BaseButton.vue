@@ -26,9 +26,12 @@ withDefaults(
 .base-button {
   border: 0;
   border-radius: 12px;
-  padding: 10px 14px;
-  font-size: 13px;
+  padding: 11px 16px;
+  font-size: 14px;
   font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   cursor: pointer;
 }
 

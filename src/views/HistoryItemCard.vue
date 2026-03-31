@@ -10,7 +10,7 @@ const emit = defineEmits<{
   toggle: [id: string]
 }>()
 
-function onToggle() {
+const onToggle = () => {
   emit("toggle", props.item.bookmark.id)
 }
 </script>
@@ -21,12 +21,25 @@ function onToggle() {
       <input type="checkbox" :checked="checked" @change="onToggle" />
       <div>
         <div class="item-title">{{ item.bookmark.title }}</div>
-        <div class="item-url">{{ item.bookmark.url }}</div>
-        <div class="item-path">当前目录：{{ item.bookmark.parentPath || "未识别" }}</div>
+        <div class="item-url">
+          <i class="fa-solid fa-link" aria-hidden="true" />
+          {{ item.bookmark.url }}
+        </div>
+        <div class="item-path">
+          <i class="fa-solid fa-folder-tree" aria-hidden="true" />
+          当前目录：{{ item.bookmark.parentPath || "未识别" }}
+        </div>
         <div class="target">
           <div class="item-title">推荐目标</div>
-          <div>{{ item.recommendation.suggestions[0]?.path || "暂无推荐" }}</div>
-          <div class="item-path">{{ item.recommendation.suggestions[0]?.reason || "当前没有生成推荐结果" }}</div>
+          <div>
+            {{ item.recommendation.suggestions[0]?.path || "暂无推荐" }}
+          </div>
+          <div class="item-path">
+            {{
+              item.recommendation.suggestions[0]?.reason ||
+              "当前没有生成推荐结果"
+            }}
+          </div>
         </div>
       </div>
     </div>
@@ -58,23 +71,29 @@ function onToggle() {
 }
 
 .item-url {
-  font-size: 12px;
+  font-size: 13px;
   color: #627089;
   margin-bottom: 8px;
   word-break: break-all;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .item-path {
-  font-size: 12px;
+  font-size: 13px;
   color: #627089;
   margin-bottom: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .target {
   border-radius: 12px;
   background: #f6f8fb;
   padding: 10px;
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.6;
 }
 </style>
