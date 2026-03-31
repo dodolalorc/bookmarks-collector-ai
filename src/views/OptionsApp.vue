@@ -1,0 +1,479 @@
+<script setup lang="ts">
+import { computed, onMounted, ref } from "vue"
+
+import { SmartFavoritesSDK } from "../sdk/client"
+import {
+  DEFAULT_PROMPT_TEMPLATE,
+  DEFAULT_SYSTEM_PROMPT
+} from "../sdk/constants"
+import type {
+  BookmarkMoveDecision,
+  ExportSnapshot,
+  HistoryRecommendationItem,
+  SmartFavoritesSettings
+} from "../sdk/types"
+import BaseButton from "../ui/BaseButton.vue"
+import BaseCard from "../ui/BaseCard.vue"
+
+const sdk = new SmartFavoritesSDK()
+
+const settings = ref<SmartFavoritesSettings | null>(null)
+const status = ref("正在加载设置…")
+const tab = ref<"settings" | "history">(
+  location.hash === "#history" ? "history" : "settings"
+)
+const historyItems = ref<HistoryRecommendationItem[]>([])
+const selectedIds = ref<string[]>([])
+const historyStatus = ref("正在加载历史书签推荐…")
+
+const selectedDecisions = computed<BookmarkMoveDecision[]>(() =>
+  historyItems.value
+    .filter((item) => selectedIds.value.includes(item.bookmark.id))
+    .map((item) => ({
+      bookmarkId: item.bookmark.id,
+      recommendation: item.recommendation.suggestions[0]
+    }))
+    .filter((item) => Boolean(item.recommendation))
+)
+
+onMounted(() => {
+  void loadSettings()
+  void refreshHistory()
+
+  const onHashChange = () => {
+    tab.value = location.hash === "#history" ? "history" : "settings"
+  }
+
+  window.addEventListener("hashchange", onHashChange)
+})
+
+function updateSettings(next: SmartFavoritesSettings) {
+  settings.value = next
+}
+
+async function loadSettings() {
+  settings.value = await sdk.getSettings()
+  status.value = "已读取当前配置。"
+}
+
+async function saveSettings() {
+  if (!settings.value) {
+    return
+  }
+
+  await sdk.saveSettings(settings.value)
+  status.value = "配置已保存。"
+}
+
+function downloadJson(snapshot: ExportSnapshot) {
+  const blob = new Blob([JSON.stringify(snapshot, null, 2)], {
+    type: "application/json"
+  })
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement("a")
+  anchor.href = url
+  anchor.download = `smart-favorites-backup-${Date.now()}.json`
+  anchor.click()
+  URL.revokeObjectURL(url)
+}
+
+async function exportBackup() {
+  const snapshot = await sdk.exportSnapshot()
+  downloadJson(snapshot)
+  status.value = "已导出本地备份。"
+}
+
+async function refreshHistory() {
+  historyStatus.value = "正在重新生成历史书签推荐…"
+  const items = await sdk.listHistoryBookmarks(40)
+  historyItems.value = items.filter(
+    (item) => item.recommendation.suggestions.length > 0
+  )
+  selectedIds.value = []
+  historyStatus.value = "已生成推荐。勾选需要迁移的书签后再执行。"
+}
+
+async function applySelected() {
+  if (selectedDecisions.value.length === 0) {
+    historyStatus.value = "先勾选至少一条推荐记录。"
+    return
+  }
+
+  const result = await sdk.applyBulkBookmarkRecommendations(
+    selectedDecisions.value
+  )
+  historyStatus.value = `已迁移 ${result.moved} 条书签。`
+  await refreshHistory()
+}
+
+function toggleSelected(id: string) {
+  selectedIds.value = selectedIds.value.includes(id)
+    ? selectedIds.value.filter((item) => item !== id)
+    : [...selectedIds.value, id]
+}
+
+function switchTab(next: "settings" | "history") {
+  tab.value = next
+  location.hash = next === "history" ? "#history" : ""
+}
+</script>
+
+<template>
+  <main class="page">
+    <BaseCard class="panel-head">
+      <div>
+        <div class="eyebrow">Workspace</div>
+        <div class="title">插件管理台</div>
+      </div>
+      <div class="tab-actions">
+        <BaseButton
+          :variant="tab === 'settings' ? 'primary' : 'secondary'"
+          @click="switchTab('settings')"
+          >模型配置</BaseButton
+        >
+        <BaseButton
+          :variant="tab === 'history' ? 'primary' : 'secondary'"
+          @click="switchTab('history')"
+          >历史整理</BaseButton
+        >
+      </div>
+    </BaseCard>
+
+    <template v-if="!settings">
+      <BaseCard>{{ status }}</BaseCard>
+    </template>
+
+    <template v-else-if="tab === 'settings'">
+      <BaseCard>
+        <h2>AI Provider</h2>
+        <label class="label">
+          接口基地址
+          <input
+            class="field"
+            :value="settings.provider.baseUrl"
+            @input="
+              updateSettings({
+                ...settings,
+                provider: {
+                  ...settings.provider,
+                  baseUrl: ($event.target as HTMLInputElement).value
+                }
+              })
+            " />
+        </label>
+        <label class="label">
+          模型名称
+          <input
+            class="field"
+            :value="settings.provider.model"
+            @input="
+              updateSettings({
+                ...settings,
+                provider: {
+                  ...settings.provider,
+                  model: ($event.target as HTMLInputElement).value
+                }
+              })
+            " />
+        </label>
+        <label class="label">
+          API Key
+          <input
+            class="field"
+            type="password"
+            :value="settings.provider.apiKey"
+            @input="
+              updateSettings({
+                ...settings,
+                provider: {
+                  ...settings.provider,
+                  apiKey: ($event.target as HTMLInputElement).value
+                }
+              })
+            " />
+        </label>
+      </BaseCard>
+
+      <BaseCard>
+        <h2>Prompt 模板</h2>
+        <label class="label">
+          System Prompt
+          <textarea
+            class="field"
+            rows="6"
+            :value="settings.prompts.system"
+            @input="
+              updateSettings({
+                ...settings,
+                prompts: {
+                  ...settings.prompts,
+                  system: ($event.target as HTMLTextAreaElement).value
+                }
+              })
+            " />
+        </label>
+        <label class="label">
+          User Prompt Template
+          <textarea
+            class="field"
+            rows="12"
+            :value="settings.prompts.template"
+            @input="
+              updateSettings({
+                ...settings,
+                prompts: {
+                  ...settings.prompts,
+                  template: ($event.target as HTMLTextAreaElement).value
+                }
+              })
+            " />
+        </label>
+        <BaseButton
+          @click="
+            updateSettings({
+              ...settings,
+              prompts: {
+                system: DEFAULT_SYSTEM_PROMPT,
+                template: DEFAULT_PROMPT_TEMPLATE
+              }
+            })
+          "
+          >恢复默认模板</BaseButton
+        >
+      </BaseCard>
+
+      <BaseCard>
+        <h2>策略开关</h2>
+        <label class="check-item"
+          ><input
+            type="checkbox"
+            :checked="settings.behavior.allowCreateFolder"
+            @change="
+              updateSettings({
+                ...settings,
+                behavior: {
+                  ...settings.behavior,
+                  allowCreateFolder: ($event.target as HTMLInputElement).checked
+                }
+              })
+            " />允许推荐创建新文件夹</label
+        >
+        <label class="check-item"
+          ><input
+            type="checkbox"
+            :checked="settings.behavior.preferExistingFolder"
+            @change="
+              updateSettings({
+                ...settings,
+                behavior: {
+                  ...settings.behavior,
+                  preferExistingFolder: ($event.target as HTMLInputElement)
+                    .checked
+                }
+              })
+            " />优先推荐已有结构，降低新建文件夹频率</label
+        >
+        <label class="check-item"
+          ><input
+            type="checkbox"
+            :checked="settings.behavior.storeKnowledge"
+            @change="
+              updateSettings({
+                ...settings,
+                behavior: {
+                  ...settings.behavior,
+                  storeKnowledge: ($event.target as HTMLInputElement).checked
+                }
+              })
+            " />保存页面摘要、标签和推荐结果到本地知识库</label
+        >
+      </BaseCard>
+
+      <BaseCard class="actions">
+        <div class="status">{{ status }}</div>
+        <div class="button-row">
+          <BaseButton @click="exportBackup">导出备份</BaseButton>
+          <BaseButton variant="primary" @click="saveSettings"
+            >保存配置</BaseButton
+          >
+        </div>
+      </BaseCard>
+    </template>
+
+    <template v-else>
+      <BaseCard>
+        <div class="row">
+          <h2>历史书签批量整理</h2>
+          <div class="button-row">
+            <BaseButton @click="refreshHistory">刷新推荐</BaseButton>
+            <BaseButton variant="primary" @click="applySelected"
+              >应用选中项</BaseButton
+            >
+          </div>
+        </div>
+        <div class="status">{{ historyStatus }}</div>
+      </BaseCard>
+
+      <BaseCard>
+        <div class="history-list">
+          <label
+            v-for="item in historyItems"
+            :key="item.bookmark.id"
+            class="history-item"
+            :class="{ selected: selectedIds.includes(item.bookmark.id) }">
+            <div class="history-main">
+              <input
+                type="checkbox"
+                :checked="selectedIds.includes(item.bookmark.id)"
+                @change="toggleSelected(item.bookmark.id)" />
+              <div>
+                <div class="item-title">{{ item.bookmark.title }}</div>
+                <div class="item-url">{{ item.bookmark.url }}</div>
+                <div class="item-path">
+                  当前目录：{{ item.bookmark.parentPath || "未识别" }}
+                </div>
+                <div class="target">
+                  <div class="item-title">推荐目标</div>
+                  <div>
+                    {{ item.recommendation.suggestions[0]?.path || "暂无推荐" }}
+                  </div>
+                  <div class="item-path">
+                    {{
+                      item.recommendation.suggestions[0]?.reason ||
+                      "当前没有生成推荐结果"
+                    }}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </label>
+        </div>
+      </BaseCard>
+    </template>
+  </main>
+</template>
+
+<style scoped>
+.page {
+  min-height: 100vh;
+  padding: 32px;
+  background: linear-gradient(135deg, #f3f7ff 0%, #fff8e8 45%, #fff 100%);
+  color: #172033;
+  font-family: "SF Pro Display", "Segoe UI", "PingFang SC", "Hiragino Sans GB",
+    sans-serif;
+}
+
+:deep(.base-card) {
+  max-width: 1100px;
+  margin: 0 auto 20px;
+  padding: 24px;
+  border-radius: 20px;
+}
+
+.panel-head,
+.row,
+.actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+
+.tab-actions,
+.button-row {
+  display: flex;
+  gap: 12px;
+}
+
+.eyebrow {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #627089;
+}
+
+.title {
+  font-size: 28px;
+  font-weight: 800;
+  margin-top: 6px;
+}
+
+.label {
+  display: block;
+  margin-bottom: 16px;
+  color: #627089;
+}
+
+.field {
+  width: 100%;
+  margin-top: 8px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid #d7deea;
+  box-sizing: border-box;
+  font-size: 14px;
+  background: #fff;
+  resize: vertical;
+}
+
+.check-item {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.status {
+  color: #627089;
+}
+
+.history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.history-item {
+  display: block;
+  border: 1px solid rgba(23, 32, 51, 0.08);
+  border-radius: 16px;
+  padding: 14px;
+  background: #fff;
+}
+
+.history-item.selected {
+  border-color: #ffb84d;
+  background: #fff8e8;
+}
+
+.history-main {
+  display: flex;
+  gap: 10px;
+}
+
+.item-title {
+  font-weight: 800;
+  margin-bottom: 6px;
+}
+
+.item-url {
+  font-size: 12px;
+  color: #627089;
+  margin-bottom: 8px;
+  word-break: break-all;
+}
+
+.item-path {
+  font-size: 12px;
+  color: #627089;
+  margin-bottom: 8px;
+}
+
+.target {
+  border-radius: 12px;
+  background: #f6f8fb;
+  padding: 10px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+</style>

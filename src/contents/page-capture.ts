@@ -1,19 +1,24 @@
 import type { PlasmoCSConfig } from "plasmo"
+import { createApp, reactive } from "vue"
 
 import type {
   CapturedSnippet,
   CapturePageResponse,
   PageCaptureDraft,
   PageContext
-} from "~/src/sdk/types"
-
-export const config: PlasmoCSConfig = {
-  matches: ["<all_urls>"]
-}
-
+} from "../sdk/types"
+import PageCaptureOverlay from "./PageCaptureOverlay.vue"
 const ROOT_ID = "smart-favorites-overlay-root"
 const HIGHLIGHT_ID = "smart-favorites-highlight-box"
 const SIDEBAR_WIDTH = 348
+const PAGE_INSET_TRANSITION = "margin-right 220ms ease"
+
+const originalPageLayout = {
+  htmlMarginRight: document.documentElement.style.marginRight,
+  htmlTransition: document.documentElement.style.transition,
+  bodyMarginRight: document.body?.style.marginRight ?? "",
+  bodyTransition: document.body?.style.transition ?? ""
+}
 
 type OverlayState = {
   draft: PageCaptureDraft
@@ -21,9 +26,10 @@ type OverlayState = {
   elementPickMode: boolean
   status: string
   bookmarkPromptVisible: boolean
+  selectionText: string
 }
 
-const state: OverlayState = {
+const state = reactive<OverlayState>({
   draft: {
     url: location.href,
     snippets: [],
@@ -32,8 +38,11 @@ const state: OverlayState = {
   sidebarOpen: false,
   elementPickMode: false,
   status: "等待抓取",
-  bookmarkPromptVisible: false
-}
+  bookmarkPromptVisible: false,
+  selectionText: ""
+})
+
+let overlayMounted = false
 
 function createSnippet(
   mode: "selection" | "element",
@@ -94,8 +103,8 @@ function cssPathFor(element: Element) {
 
     const siblings = current.parentElement
       ? Array.from(current.parentElement.children).filter(
-          (item) => item.tagName === current.tagName
-        )
+        (item) => item.tagName === current.tagName
+      )
       : []
     const index =
       siblings.length > 1 ? `:nth-of-type(${siblings.indexOf(current) + 1})` : ""
@@ -193,110 +202,78 @@ function rootElement() {
   return root
 }
 
-function escapeHtml(value: string) {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-}
+function syncPageInset() {
+  if (state.sidebarOpen) {
+    const inset = `${SIDEBAR_WIDTH}px`
+    document.documentElement.style.transition = PAGE_INSET_TRANSITION
+    document.documentElement.style.marginRight = inset
 
-function snippetMarkup(snippet: CapturedSnippet) {
-  return `
-    <div style="border:1px solid rgba(112,135,168,0.14);border-radius:18px;padding:12px;background:linear-gradient(180deg,#ffffff 0%,#f7fbff 100%);box-shadow:0 8px 20px rgba(101,133,173,0.08);">
-      <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;margin-bottom:8px;">
-        <div>
-          <div style="font-size:11px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#6d7fb0;">${snippet.mode === "selection" ? "Selection" : "Element"}</div>
-          <div style="font-size:12px;color:#7f8ca6;margin-top:3px;">${escapeHtml(snippet.label)}</div>
-        </div>
-        <button data-action="delete-snippet" data-snippet-id="${snippet.id}" style="border:0;border-radius:999px;padding:6px 9px;background:#eef4ff;color:#5d6f98;font-size:11px;font-weight:800;cursor:pointer;">删除</button>
-      </div>
-      ${
-        snippet.selector
-          ? `<div style="font-size:11px;color:#8d99b3;word-break:break-all;margin-bottom:8px;">${escapeHtml(snippet.selector)}</div>`
-          : ""
-      }
-      <div style="font-size:12px;line-height:1.7;color:#25324d;">${escapeHtml(snippet.text.slice(0, 420))}</div>
-    </div>
-  `
+    if (document.body) {
+      document.body.style.transition = PAGE_INSET_TRANSITION
+      document.body.style.marginRight = inset
+    }
+
+    return
+  }
+
+  document.documentElement.style.marginRight = originalPageLayout.htmlMarginRight
+  document.documentElement.style.transition = originalPageLayout.htmlTransition
+
+  if (document.body) {
+    document.body.style.marginRight = originalPageLayout.bodyMarginRight
+    document.body.style.transition = originalPageLayout.bodyTransition
+  }
 }
 
 function renderOverlay() {
-  const root = rootElement()
-  const selection = currentSelectionText()
-  const sidebarTransform = state.sidebarOpen
-    ? "translateX(0)"
-    : `translateX(${SIDEBAR_WIDTH + 28}px)`
+  state.selectionText = currentSelectionText()
 
-  root.innerHTML = `
-    <div style="position:fixed;inset:0;pointer-events:none;z-index:2147483646;font-family:'SF Pro Text','Segoe UI','PingFang SC','Hiragino Sans GB',sans-serif;">
-      ${
-        state.bookmarkPromptVisible
-          ? `
-        <div style="position:fixed;right:72px;top:86px;pointer-events:auto;max-width:240px;border-radius:18px;padding:14px 14px 12px;background:linear-gradient(135deg,#fff9ff 0%,#f4fbff 55%,#edf8ff 100%);border:1px solid rgba(132,174,224,0.24);box-shadow:0 18px 34px rgba(93,118,164,0.18);">
-          <div style="font-size:13px;font-weight:800;color:#2b3962;margin-bottom:6px;">已检测到你收藏了当前页面</div>
-          <div style="font-size:12px;line-height:1.6;color:#6d7994;margin-bottom:10px;">要不要现在整理标签并补充当前页的小知识点？</div>
-          <div style="display:flex;gap:8px;">
-            <button data-action="classify-now" style="pointer-events:auto;border:0;border-radius:999px;padding:8px 11px;background:linear-gradient(135deg,#ff8ed8 0%,#8ad8ff 100%);color:#21304f;font-size:11px;font-weight:800;cursor:pointer;">立即分类标签</button>
-            <button data-action="dismiss-bookmark-prompt" style="pointer-events:auto;border:0;border-radius:999px;padding:8px 11px;background:#eef4ff;color:#7083a6;font-size:11px;font-weight:800;cursor:pointer;">稍后</button>
-          </div>
-        </div>
-      `
-          : ""
-      }
+  syncPageInset()
 
-      <button data-action="toggle-sidebar" style="position:fixed;right:20px;top:84px;pointer-events:auto;width:20px;height:20px;border-radius:50%;border:1px solid rgba(255,255,255,0.72);background:radial-gradient(circle at 30% 30%,#ffd8f3 0%,#a8e8ff 48%,#7ca5ff 100%);box-shadow:0 8px 20px rgba(97,130,179,0.24);cursor:pointer;"></button>
+  if (overlayMounted) {
+    return
+  }
 
-      <aside style="position:fixed;right:18px;top:56px;bottom:20px;width:${SIDEBAR_WIDTH}px;pointer-events:auto;transform:${sidebarTransform};transition:transform 180ms ease;display:flex;flex-direction:column;border-radius:28px;overflow:hidden;background:linear-gradient(180deg,rgba(255,249,255,0.98) 0%,rgba(244,250,255,0.98) 42%,rgba(238,247,255,0.98) 100%);border:1px solid rgba(136,176,224,0.18);box-shadow:0 28px 60px rgba(99,129,173,0.20);backdrop-filter:blur(18px);">
-        <div style="padding:18px 18px 14px;border-bottom:1px solid rgba(136,176,224,0.14);background:linear-gradient(135deg,rgba(255,217,244,0.58) 0%,rgba(213,243,255,0.68) 65%,rgba(240,248,255,0.76) 100%);">
-          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
-            <div>
-              <div style="font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:#7d88b1;font-weight:800;">Current Bookmark</div>
-              <div style="font-size:22px;line-height:1.05;font-weight:900;color:#25324d;margin-top:6px;">页面知识抓取</div>
-              <div style="font-size:12px;line-height:1.6;color:#6e7997;margin-top:8px;">统一收集当前书签页下的小知识点，不做分类拆分。</div>
-            </div>
-            <button data-action="toggle-sidebar" style="border:0;border-radius:999px;padding:8px 10px;background:rgba(255,255,255,0.74);color:#69779a;font-size:11px;font-weight:800;cursor:pointer;">收起</button>
-          </div>
-          <div style="margin-top:12px;font-size:12px;line-height:1.6;color:#65728f;">${escapeHtml(state.status)}</div>
-        </div>
+  overlayMounted = true
 
-        <div style="padding:16px 16px 0;display:flex;gap:8px;flex-wrap:wrap;">
-          <button data-action="capture-selection" style="border:0;border-radius:999px;padding:10px 12px;background:linear-gradient(135deg,#ffd6f1 0%,#bee8ff 100%);color:#23314d;font-size:12px;font-weight:800;cursor:pointer;">抓取当前选中</button>
-          <button data-action="toggle-element-mode" style="border:0;border-radius:999px;padding:10px 12px;background:${state.elementPickMode ? "linear-gradient(135deg,#ffc5e8 0%,#a9e1ff 100%)" : "#edf5ff"};color:#546786;font-size:12px;font-weight:800;cursor:pointer;">${state.elementPickMode ? "退出框选模式" : "开启框选模式"}</button>
-        </div>
-
-        ${
-          selection
-            ? `
-          <div style="margin:14px 16px 0;border-radius:18px;padding:12px 13px;background:linear-gradient(135deg,#fff1fa 0%,#eef9ff 100%);border:1px solid rgba(150,195,235,0.18);">
-            <div style="font-size:11px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#7c86ad;margin-bottom:6px;">Current Selection</div>
-            <div style="font-size:12px;line-height:1.65;color:#31415f;">${escapeHtml(selection.slice(0, 280))}</div>
-          </div>
-        `
-            : ""
-        }
-
-        <div style="padding:14px 16px 16px;overflow:auto;display:flex;flex-direction:column;gap:12px;flex:1;">
-          ${
-            state.draft.snippets.length === 0
-              ? `
-            <div style="border-radius:20px;padding:16px;background:rgba(255,255,255,0.7);border:1px dashed rgba(126,169,220,0.28);font-size:12px;line-height:1.7;color:#72809e;">
-              这里会展示当前书签页提取出的多个小知识点。你可以先选中文字直接加入，也可以开启框选模式点击页面区域。
-            </div>
-          `
-              : state.draft.snippets.map(snippetMarkup).join("")
-          }
-        </div>
-
-        <div style="padding:12px 16px 16px;border-top:1px solid rgba(136,176,224,0.12);display:flex;justify-content:space-between;align-items:center;gap:8px;">
-          <div style="font-size:11px;color:#8591ac;">模型配置和书签整理保留在管理页中</div>
-          <div style="display:flex;gap:8px;">
-            <button data-action="open-options" style="border:0;border-radius:999px;padding:8px 10px;background:#eef4ff;color:#657899;font-size:11px;font-weight:800;cursor:pointer;">模型配置</button>
-            <button data-action="open-history" style="border:0;border-radius:999px;padding:8px 10px;background:#eef4ff;color:#657899;font-size:11px;font-weight:800;cursor:pointer;">书签整理</button>
-          </div>
-        </div>
-      </aside>
-    </div>
-  `
+  createApp(PageCaptureOverlay, {
+    sidebarWidth: SIDEBAR_WIDTH,
+    state,
+    onToggleSidebar: () => {
+      state.sidebarOpen = !state.sidebarOpen
+      renderOverlay()
+    },
+    onCaptureSelection: () => {
+      void captureSelection()
+    },
+    onToggleElementMode: () => {
+      state.elementPickMode = !state.elementPickMode
+      state.sidebarOpen = true
+      state.status = state.elementPickMode
+        ? "框选模式已开启，点击页面区域即可抓取一段内容。"
+        : "框选模式已关闭。"
+      renderOverlay()
+    },
+    onDeleteSnippet: (snippetId: string) => {
+      void removeSnippet(snippetId).then(() => renderOverlay())
+    },
+    onOpenOptions: () => {
+      void openExtensionPage("options.html")
+    },
+    onOpenHistory: () => {
+      void openExtensionPage("options.html#history")
+    },
+    onClassifyNow: () => {
+      state.bookmarkPromptVisible = false
+      state.sidebarOpen = true
+      state.status = "已打开当前书签页侧边栏，你可以先补充关键知识点，再进行分类。"
+      renderOverlay()
+    },
+    onDismissBookmarkPrompt: () => {
+      state.bookmarkPromptVisible = false
+      renderOverlay()
+    }
+  }).mount(rootElement())
 }
 
 async function captureSelection() {
@@ -312,73 +289,6 @@ async function captureSelection() {
   state.status = "已把选中文本加入当前书签页知识列表。"
   state.sidebarOpen = true
   renderOverlay()
-}
-
-function bindOverlayEvents() {
-  rootElement().addEventListener("click", async (event) => {
-    const target = event.target
-
-    if (!(target instanceof HTMLElement)) {
-      return
-    }
-
-    const action = target.dataset.action
-    if (!action) {
-      return
-    }
-
-    if (action === "toggle-sidebar") {
-      state.sidebarOpen = !state.sidebarOpen
-      renderOverlay()
-      return
-    }
-
-    if (action === "toggle-element-mode") {
-      state.elementPickMode = !state.elementPickMode
-      state.sidebarOpen = true
-      state.status = state.elementPickMode
-        ? "框选模式已开启，点击页面区域即可抓取一段内容。"
-        : "框选模式已关闭。"
-      renderOverlay()
-      return
-    }
-
-    if (action === "capture-selection") {
-      await captureSelection()
-      return
-    }
-
-    if (action === "delete-snippet") {
-      const snippetId = target.dataset.snippetId
-      if (snippetId) {
-        await removeSnippet(snippetId)
-      }
-      return
-    }
-
-    if (action === "open-options") {
-      await openExtensionPage("options.html")
-      return
-    }
-
-    if (action === "open-history") {
-      await openExtensionPage("options.html#history")
-      return
-    }
-
-    if (action === "classify-now") {
-      state.bookmarkPromptVisible = false
-      state.sidebarOpen = true
-      state.status = "已打开当前书签页侧边栏，你可以先补充关键知识点，再进行分类。"
-      renderOverlay()
-      return
-    }
-
-    if (action === "dismiss-bookmark-prompt") {
-      state.bookmarkPromptVisible = false
-      renderOverlay()
-    }
-  })
 }
 
 function bindElementPicker() {
@@ -452,9 +362,10 @@ function bindElementPicker() {
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message?.type === "smart-favorites/capture-page") {
+    state.selectionText = currentSelectionText()
     sendResponse({
       page: getPageContext(),
-      selectionText: currentSelectionText(),
+      selectionText: state.selectionText,
       snippets: state.draft.snippets,
       extractedAt: new Date().toISOString()
     } satisfies CapturePageResponse)
@@ -476,6 +387,5 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 })
 
 void fetchDraft()
-bindOverlayEvents()
 bindElementPicker()
 renderOverlay()
