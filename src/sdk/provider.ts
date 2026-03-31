@@ -1,3 +1,5 @@
+import { generateText } from "@xsai/generate-text"
+
 import type {
   FolderIndex,
   FolderSuggestion,
@@ -31,6 +33,37 @@ function renderTemplate(
     .replaceAll("{{folders}}", folders)
 }
 
+const suggestionSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["suggestions"],
+  properties: {
+    suggestions: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["type"],
+        properties: {
+          type: {
+            type: "string",
+            enum: ["existing", "create"]
+          },
+          folderId: {
+            type: "string"
+          },
+          title: {
+            type: "string"
+          },
+          reason: {
+            type: "string"
+          }
+        }
+      }
+    }
+  }
+} as const
+
 function parseJsonResponse(content: string) {
   const match = content.match(/\{[\s\S]*\}/)
   if (!match) {
@@ -53,41 +86,31 @@ export async function extractAiRecommendations(
   settings: SmartFavoritesSettings,
   fallback: RecommendationResult
 ): Promise<RecommendationResult> {
-  const response = await fetch(`${settings.provider.baseUrl}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${settings.provider.apiKey}`
+  const result = await generateText({
+    apiKey: settings.provider.apiKey,
+    baseURL: settings.provider.baseUrl,
+    model: settings.provider.model,
+    temperature: 0.2,
+    response_format: {
+      type: "json_schema",
+      json_schema: {
+        name: "bookmark_folder_suggestions",
+        strict: true,
+        schema: suggestionSchema
+      }
     },
-    body: JSON.stringify({
-      model: settings.provider.model,
-      temperature: 0.2,
-      response_format: {
-        type: "json_object"
+    messages: [
+      {
+        role: "system",
+        content: settings.prompts.system
       },
-      messages: [
-        {
-          role: "system",
-          content: settings.prompts.system
-        },
-        {
-          role: "user",
-          content: renderTemplate(settings.prompts.template, input, folderIndex)
-        }
-      ]
-    })
+      {
+        role: "user",
+        content: renderTemplate(settings.prompts.template, input, folderIndex)
+      }
+    ]
   })
-
-  if (!response.ok) {
-    throw new Error(`AI 请求失败: ${response.status}`)
-  }
-
-  const json = await response.json()
-  const content =
-    json.choices?.[0]?.message?.content ??
-    json.output?.[0]?.content?.[0]?.text ??
-    ""
-  const parsed = parseJsonResponse(content)
+  const parsed = parseJsonResponse(result.text || "")
 
   const suggestions: FolderSuggestion[] = []
 

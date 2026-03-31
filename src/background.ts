@@ -32,6 +32,14 @@ import type {
   SmartFavoritesSettings
 } from "~/src/sdk/types"
 
+chrome.bookmarks.onCreated.addListener((_, node) => {
+  if (!node.url?.startsWith("http")) {
+    return
+  }
+
+  void notifyBookmarkCreated(node.url)
+})
+
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   void handleMessage(message)
     .then((payload) => sendResponse({ ok: true, payload }))
@@ -214,4 +222,20 @@ async function handleOpenExtensionPage(payload: ExtensionPageOpenPayload) {
   const url = chrome.runtime.getURL(payload.path)
   await chrome.tabs.create({ url })
   return { success: true }
+}
+
+async function notifyBookmarkCreated(url: string) {
+  const matchedTabs = await chrome.tabs.query({
+    url
+  })
+
+  await Promise.all(
+    matchedTabs
+      .filter((tab) => typeof tab.id === "number")
+      .map((tab) =>
+        chrome.tabs.sendMessage(tab.id as number, {
+          type: "smart-favorites/bookmark-created"
+        }).catch(() => undefined)
+      )
+  )
 }

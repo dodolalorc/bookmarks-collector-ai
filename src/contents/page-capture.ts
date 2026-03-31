@@ -13,13 +13,14 @@ export const config: PlasmoCSConfig = {
 
 const ROOT_ID = "smart-favorites-overlay-root"
 const HIGHLIGHT_ID = "smart-favorites-highlight-box"
+const SIDEBAR_WIDTH = 348
 
 type OverlayState = {
   draft: PageCaptureDraft
-  expanded: boolean
-  menuOpen: boolean
+  sidebarOpen: boolean
   elementPickMode: boolean
   status: string
+  bookmarkPromptVisible: boolean
 }
 
 const state: OverlayState = {
@@ -28,10 +29,10 @@ const state: OverlayState = {
     snippets: [],
     updatedAt: new Date().toISOString()
   },
-  expanded: false,
-  menuOpen: false,
+  sidebarOpen: false,
   elementPickMode: false,
-  status: "等待抓取"
+  status: "等待抓取",
+  bookmarkPromptVisible: false
 }
 
 function createSnippet(
@@ -163,11 +164,12 @@ function ensureHighlightBox() {
     Object.assign(box.style, {
       position: "absolute",
       pointerEvents: "none",
-      border: "2px solid #ff9b00",
-      background: "rgba(255, 184, 77, 0.16)",
+      border: "1.5px solid #ff7ed9",
+      background: "rgba(128, 216, 255, 0.16)",
+      boxShadow: "0 0 0 1px rgba(255,255,255,0.65) inset",
       zIndex: "2147483645",
       display: "none",
-      borderRadius: "8px"
+      borderRadius: "10px"
     })
     document.documentElement.appendChild(box)
   }
@@ -191,19 +193,29 @@ function rootElement() {
   return root
 }
 
-function snippetMarkup(snippet: CapturedSnippet) {
-  const selector = snippet.selector
-    ? `<div style="font-size:11px;color:#627089;margin-bottom:6px;word-break:break-all;">${escapeHtml(snippet.selector)}</div>`
-    : ""
+function escapeHtml(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+}
 
+function snippetMarkup(snippet: CapturedSnippet) {
   return `
-    <div data-snippet-id="${snippet.id}" style="border:1px solid rgba(23,32,51,0.08);border-radius:14px;padding:12px;background:#fff;">
-      <div style="display:flex;justify-content:space-between;gap:8px;margin-bottom:6px;">
-        <div style="font-size:12px;font-weight:800;">${snippet.mode === "selection" ? "文本抓取" : "元素框选"}</div>
-        <button data-action="delete-snippet" data-snippet-id="${snippet.id}" style="border:0;border-radius:10px;padding:6px 8px;background:#f4f6f8;color:#172033;font-size:12px;font-weight:700;cursor:pointer;">删除</button>
+    <div style="border:1px solid rgba(112,135,168,0.14);border-radius:18px;padding:12px;background:linear-gradient(180deg,#ffffff 0%,#f7fbff 100%);box-shadow:0 8px 20px rgba(101,133,173,0.08);">
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;margin-bottom:8px;">
+        <div>
+          <div style="font-size:11px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#6d7fb0;">${snippet.mode === "selection" ? "Selection" : "Element"}</div>
+          <div style="font-size:12px;color:#7f8ca6;margin-top:3px;">${escapeHtml(snippet.label)}</div>
+        </div>
+        <button data-action="delete-snippet" data-snippet-id="${snippet.id}" style="border:0;border-radius:999px;padding:6px 9px;background:#eef4ff;color:#5d6f98;font-size:11px;font-weight:800;cursor:pointer;">删除</button>
       </div>
-      ${selector}
-      <div style="font-size:12px;line-height:1.6;">${escapeHtml(snippet.text.slice(0, 420))}</div>
+      ${
+        snippet.selector
+          ? `<div style="font-size:11px;color:#8d99b3;word-break:break-all;margin-bottom:8px;">${escapeHtml(snippet.selector)}</div>`
+          : ""
+      }
+      <div style="font-size:12px;line-height:1.7;color:#25324d;">${escapeHtml(snippet.text.slice(0, 420))}</div>
     </div>
   `
 }
@@ -211,79 +223,80 @@ function snippetMarkup(snippet: CapturedSnippet) {
 function renderOverlay() {
   const root = rootElement()
   const selection = currentSelectionText()
-  const snippets =
-    state.draft.snippets.length === 0
-      ? `
-        <div style="border-radius:14px;background:#f6f8fb;padding:14px;color:#627089;font-size:12px;line-height:1.6;">
-          还没有内容。你可以直接选中文字后加入，也可以开启元素框选模式点选页面区域。
-        </div>
-      `
-      : state.draft.snippets.map(snippetMarkup).join("")
+  const sidebarTransform = state.sidebarOpen
+    ? "translateX(0)"
+    : `translateX(${SIDEBAR_WIDTH + 28}px)`
 
   root.innerHTML = `
-    <div style="position:fixed;right:20px;top:88px;z-index:2147483646;font-family:'SF Pro Text','Segoe UI','PingFang SC','Hiragino Sans GB',sans-serif;">
-      <div style="position:relative;display:flex;flex-direction:column;align-items:flex-end;gap:10px;">
-        ${
-          state.menuOpen
-            ? `
-          <div style="width:196px;border-radius:18px;padding:12px;background:rgba(23,32,51,0.96);color:#fff;box-shadow:0 20px 40px rgba(23,32,51,0.28);">
-            <div style="font-size:11px;opacity:0.7;margin-bottom:10px;">常用操作</div>
-            <div style="display:flex;flex-direction:column;gap:8px;">
-              <button data-action="capture-selection" style="border:0;border-radius:12px;padding:10px 12px;font-size:12px;font-weight:700;cursor:pointer;background:#ffb84d;color:#172033;">抓取当前选中文本</button>
-              <button data-action="toggle-element-mode" style="border:0;border-radius:12px;padding:10px 12px;font-size:12px;font-weight:700;cursor:pointer;background:${state.elementPickMode ? "#ffd5a0" : "#ffffff"};color:#172033;">${state.elementPickMode ? "退出元素框选" : "开启元素框选"}</button>
-              <button data-action="open-options" style="border:0;border-radius:12px;padding:10px 12px;font-size:12px;font-weight:700;cursor:pointer;background:#eff3ff;color:#172033;">打开模型配置</button>
-              <button data-action="open-history" style="border:0;border-radius:12px;padding:10px 12px;font-size:12px;font-weight:700;cursor:pointer;background:#eef8f4;color:#172033;">查看书签整理</button>
-            </div>
+    <div style="position:fixed;inset:0;pointer-events:none;z-index:2147483646;font-family:'SF Pro Text','Segoe UI','PingFang SC','Hiragino Sans GB',sans-serif;">
+      ${
+        state.bookmarkPromptVisible
+          ? `
+        <div style="position:fixed;right:72px;top:86px;pointer-events:auto;max-width:240px;border-radius:18px;padding:14px 14px 12px;background:linear-gradient(135deg,#fff9ff 0%,#f4fbff 55%,#edf8ff 100%);border:1px solid rgba(132,174,224,0.24);box-shadow:0 18px 34px rgba(93,118,164,0.18);">
+          <div style="font-size:13px;font-weight:800;color:#2b3962;margin-bottom:6px;">已检测到你收藏了当前页面</div>
+          <div style="font-size:12px;line-height:1.6;color:#6d7994;margin-bottom:10px;">要不要现在整理标签并补充当前页的小知识点？</div>
+          <div style="display:flex;gap:8px;">
+            <button data-action="classify-now" style="pointer-events:auto;border:0;border-radius:999px;padding:8px 11px;background:linear-gradient(135deg,#ff8ed8 0%,#8ad8ff 100%);color:#21304f;font-size:11px;font-weight:800;cursor:pointer;">立即分类标签</button>
+            <button data-action="dismiss-bookmark-prompt" style="pointer-events:auto;border:0;border-radius:999px;padding:8px 11px;background:#eef4ff;color:#7083a6;font-size:11px;font-weight:800;cursor:pointer;">稍后</button>
           </div>
-        `
-            : ""
-        }
-
-        ${
-          state.expanded
-            ? `
-          <div style="width:360px;max-height:70vh;overflow:auto;border-radius:24px;padding:16px;background:rgba(255,255,255,0.97);color:#172033;border:1px solid rgba(23,32,51,0.1);box-shadow:0 24px 48px rgba(23,32,51,0.18);">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-              <div>
-                <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.12em;color:#b26a00;font-weight:800;">Smart Favorites</div>
-                <div style="font-size:20px;font-weight:800;">内容抓取面板</div>
-              </div>
-              <button data-action="collapse-panel" style="border:0;border-radius:12px;padding:8px 10px;background:#172033;color:#fff;font-size:12px;font-weight:700;cursor:pointer;">收起</button>
-            </div>
-            <div style="font-size:12px;color:#627089;margin-bottom:10px;line-height:1.6;">${escapeHtml(state.status)}</div>
-            <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
-              <button data-action="capture-selection" style="border:0;border-radius:12px;padding:10px 12px;font-size:12px;font-weight:700;cursor:pointer;background:#ffb84d;color:#172033;">添加当前选中</button>
-              <button data-action="toggle-element-mode" style="border:0;border-radius:12px;padding:10px 12px;font-size:12px;font-weight:700;cursor:pointer;background:${state.elementPickMode ? "#ffd9ad" : "#eef3ff"};color:#172033;">${state.elementPickMode ? "退出框选模式" : "元素框选模式"}</button>
-              <button data-action="open-history" style="border:0;border-radius:12px;padding:10px 12px;font-size:12px;font-weight:700;cursor:pointer;background:#eef8f4;color:#172033;">打开书签整理页</button>
-            </div>
-            ${
-              selection
-                ? `<div style="background:#fff6df;border-radius:14px;padding:12px;margin-bottom:12px;font-size:12px;line-height:1.6;">
-                  <div style="font-weight:800;margin-bottom:6px;">当前选中文本</div>
-                  <div>${escapeHtml(selection.slice(0, 280))}</div>
-                </div>`
-                : ""
-            }
-            <div style="display:flex;flex-direction:column;gap:10px;">${snippets}</div>
-          </div>
-        `
-            : ""
-        }
-
-        <div style="display:flex;gap:10px;">
-          <button data-action="toggle-menu" style="width:54px;height:54px;border-radius:50%;border:0;background:linear-gradient(135deg,#172033 0%,#2f4a73 55%,#ffb84d 100%);color:#fff;font-weight:800;cursor:pointer;box-shadow:0 18px 30px rgba(23,32,51,0.28);">AI</button>
-          <button data-action="toggle-panel" style="padding:0 18px;height:54px;border-radius:18px;border:0;background:rgba(255,255,255,0.96);color:#172033;font-weight:800;cursor:pointer;box-shadow:0 18px 30px rgba(23,32,51,0.18);">${state.expanded ? "收起抓取面板" : "展开抓取面板"}</button>
         </div>
-      </div>
+      `
+          : ""
+      }
+
+      <button data-action="toggle-sidebar" style="position:fixed;right:20px;top:84px;pointer-events:auto;width:20px;height:20px;border-radius:50%;border:1px solid rgba(255,255,255,0.72);background:radial-gradient(circle at 30% 30%,#ffd8f3 0%,#a8e8ff 48%,#7ca5ff 100%);box-shadow:0 8px 20px rgba(97,130,179,0.24);cursor:pointer;"></button>
+
+      <aside style="position:fixed;right:18px;top:56px;bottom:20px;width:${SIDEBAR_WIDTH}px;pointer-events:auto;transform:${sidebarTransform};transition:transform 180ms ease;display:flex;flex-direction:column;border-radius:28px;overflow:hidden;background:linear-gradient(180deg,rgba(255,249,255,0.98) 0%,rgba(244,250,255,0.98) 42%,rgba(238,247,255,0.98) 100%);border:1px solid rgba(136,176,224,0.18);box-shadow:0 28px 60px rgba(99,129,173,0.20);backdrop-filter:blur(18px);">
+        <div style="padding:18px 18px 14px;border-bottom:1px solid rgba(136,176,224,0.14);background:linear-gradient(135deg,rgba(255,217,244,0.58) 0%,rgba(213,243,255,0.68) 65%,rgba(240,248,255,0.76) 100%);">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
+            <div>
+              <div style="font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:#7d88b1;font-weight:800;">Current Bookmark</div>
+              <div style="font-size:22px;line-height:1.05;font-weight:900;color:#25324d;margin-top:6px;">页面知识抓取</div>
+              <div style="font-size:12px;line-height:1.6;color:#6e7997;margin-top:8px;">统一收集当前书签页下的小知识点，不做分类拆分。</div>
+            </div>
+            <button data-action="toggle-sidebar" style="border:0;border-radius:999px;padding:8px 10px;background:rgba(255,255,255,0.74);color:#69779a;font-size:11px;font-weight:800;cursor:pointer;">收起</button>
+          </div>
+          <div style="margin-top:12px;font-size:12px;line-height:1.6;color:#65728f;">${escapeHtml(state.status)}</div>
+        </div>
+
+        <div style="padding:16px 16px 0;display:flex;gap:8px;flex-wrap:wrap;">
+          <button data-action="capture-selection" style="border:0;border-radius:999px;padding:10px 12px;background:linear-gradient(135deg,#ffd6f1 0%,#bee8ff 100%);color:#23314d;font-size:12px;font-weight:800;cursor:pointer;">抓取当前选中</button>
+          <button data-action="toggle-element-mode" style="border:0;border-radius:999px;padding:10px 12px;background:${state.elementPickMode ? "linear-gradient(135deg,#ffc5e8 0%,#a9e1ff 100%)" : "#edf5ff"};color:#546786;font-size:12px;font-weight:800;cursor:pointer;">${state.elementPickMode ? "退出框选模式" : "开启框选模式"}</button>
+        </div>
+
+        ${
+          selection
+            ? `
+          <div style="margin:14px 16px 0;border-radius:18px;padding:12px 13px;background:linear-gradient(135deg,#fff1fa 0%,#eef9ff 100%);border:1px solid rgba(150,195,235,0.18);">
+            <div style="font-size:11px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#7c86ad;margin-bottom:6px;">Current Selection</div>
+            <div style="font-size:12px;line-height:1.65;color:#31415f;">${escapeHtml(selection.slice(0, 280))}</div>
+          </div>
+        `
+            : ""
+        }
+
+        <div style="padding:14px 16px 16px;overflow:auto;display:flex;flex-direction:column;gap:12px;flex:1;">
+          ${
+            state.draft.snippets.length === 0
+              ? `
+            <div style="border-radius:20px;padding:16px;background:rgba(255,255,255,0.7);border:1px dashed rgba(126,169,220,0.28);font-size:12px;line-height:1.7;color:#72809e;">
+              这里会展示当前书签页提取出的多个小知识点。你可以先选中文字直接加入，也可以开启框选模式点击页面区域。
+            </div>
+          `
+              : state.draft.snippets.map(snippetMarkup).join("")
+          }
+        </div>
+
+        <div style="padding:12px 16px 16px;border-top:1px solid rgba(136,176,224,0.12);display:flex;justify-content:space-between;align-items:center;gap:8px;">
+          <div style="font-size:11px;color:#8591ac;">模型配置和书签整理保留在管理页中</div>
+          <div style="display:flex;gap:8px;">
+            <button data-action="open-options" style="border:0;border-radius:999px;padding:8px 10px;background:#eef4ff;color:#657899;font-size:11px;font-weight:800;cursor:pointer;">模型配置</button>
+            <button data-action="open-history" style="border:0;border-radius:999px;padding:8px 10px;background:#eef4ff;color:#657899;font-size:11px;font-weight:800;cursor:pointer;">书签整理</button>
+          </div>
+        </div>
+      </aside>
     </div>
   `
-}
-
-function escapeHtml(value: string) {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
 }
 
 async function captureSelection() {
@@ -296,8 +309,8 @@ async function captureSelection() {
   }
 
   await storeSnippet(createSnippet("selection", text.slice(0, 2000), "selection"))
-  state.status = "已把选中文本加入内容面板。"
-  state.expanded = true
+  state.status = "已把选中文本加入当前书签页知识列表。"
+  state.sidebarOpen = true
   renderOverlay()
 }
 
@@ -314,37 +327,32 @@ function bindOverlayEvents() {
       return
     }
 
-    if (action === "toggle-menu") {
-      state.menuOpen = !state.menuOpen
-      renderOverlay()
-      return
-    }
-
-    if (action === "toggle-panel") {
-      state.expanded = !state.expanded
-      renderOverlay()
-      return
-    }
-
-    if (action === "collapse-panel") {
-      state.expanded = false
+    if (action === "toggle-sidebar") {
+      state.sidebarOpen = !state.sidebarOpen
       renderOverlay()
       return
     }
 
     if (action === "toggle-element-mode") {
       state.elementPickMode = !state.elementPickMode
-      state.menuOpen = false
+      state.sidebarOpen = true
       state.status = state.elementPickMode
-        ? "元素框选模式已开启，点击页面区域即可加入内容。"
-        : "元素框选模式已关闭。"
+        ? "框选模式已开启，点击页面区域即可抓取一段内容。"
+        : "框选模式已关闭。"
       renderOverlay()
       return
     }
 
     if (action === "capture-selection") {
-      state.menuOpen = false
       await captureSelection()
+      return
+    }
+
+    if (action === "delete-snippet") {
+      const snippetId = target.dataset.snippetId
+      if (snippetId) {
+        await removeSnippet(snippetId)
+      }
       return
     }
 
@@ -358,11 +366,17 @@ function bindOverlayEvents() {
       return
     }
 
-    if (action === "delete-snippet") {
-      const snippetId = target.dataset.snippetId
-      if (snippetId) {
-        await removeSnippet(snippetId)
-      }
+    if (action === "classify-now") {
+      state.bookmarkPromptVisible = false
+      state.sidebarOpen = true
+      state.status = "已打开当前书签页侧边栏，你可以先补充关键知识点，再进行分类。"
+      renderOverlay()
+      return
+    }
+
+    if (action === "dismiss-bookmark-prompt") {
+      state.bookmarkPromptVisible = false
+      renderOverlay()
     }
   })
 }
@@ -411,7 +425,7 @@ function bindElementPicker() {
 
       const text = target.textContent?.replace(/\s+/g, " ").trim() ?? ""
       if (text.length < 8) {
-        state.status = "这个元素内容太短，换一个块级区域。"
+        state.status = "这个区域内容太短，换一个更完整的内容块。"
         renderOverlay()
         return
       }
@@ -425,9 +439,10 @@ function bindElementPicker() {
         )
       )
 
-      state.status = `已加入元素内容：${target.tagName.toLowerCase()}`
-      state.expanded = true
+      state.status = `已加入一个页面区域：${target.tagName.toLowerCase()}`
+      state.sidebarOpen = true
       state.elementPickMode = false
+      state.bookmarkPromptVisible = false
       highlight.style.display = "none"
       renderOverlay()
     },
@@ -436,16 +451,28 @@ function bindElementPicker() {
 }
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-  if (message?.type !== "smart-favorites/capture-page") {
+  if (message?.type === "smart-favorites/capture-page") {
+    sendResponse({
+      page: getPageContext(),
+      selectionText: currentSelectionText(),
+      snippets: state.draft.snippets,
+      extractedAt: new Date().toISOString()
+    } satisfies CapturePageResponse)
     return
   }
 
-  sendResponse({
-    page: getPageContext(),
-    selectionText: currentSelectionText(),
-    snippets: state.draft.snippets,
-    extractedAt: new Date().toISOString()
-  } satisfies CapturePageResponse)
+  if (message?.type === "smart-favorites/bookmark-created") {
+    state.bookmarkPromptVisible = true
+    state.status = "检测到你刚刚收藏了当前页面。"
+    renderOverlay()
+
+    window.setTimeout(() => {
+      if (state.bookmarkPromptVisible) {
+        state.bookmarkPromptVisible = false
+        renderOverlay()
+      }
+    }, 12000)
+  }
 })
 
 void fetchDraft()
