@@ -1,7 +1,8 @@
 import type { PlasmoCSConfig } from "plasmo"
 import { createApp, reactive } from "vue"
-import "@fortawesome/fontawesome-free/css/all.min.css"
+import "../ui/design-tokens.css"
 
+import { registerFontAwesome } from "../ui/fontawesome"
 import type {
   CapturedSnippet,
   CapturePageResponse,
@@ -111,7 +112,7 @@ const renderOverlay = () => {
 
   overlayMounted = true
 
-  createApp(PageCaptureOverlay, {
+  const app = createApp(PageCaptureOverlay, {
     sidebarWidth: SIDEBAR_WIDTH,
     state,
     onToggleSidebar: () => {
@@ -148,7 +149,10 @@ const renderOverlay = () => {
       state.bookmarkPromptVisible = false
       renderOverlay()
     }
-  }).mount(ensureOverlayRoot())
+  })
+
+  registerFontAwesome(app)
+  app.mount(ensureOverlayRoot())
 }
 
 const captureSelection = async () => {

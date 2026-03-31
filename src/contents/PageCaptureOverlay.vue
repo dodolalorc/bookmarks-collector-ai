@@ -54,11 +54,11 @@ const promptRight = computed(() =>
       <div class="prompt-text">要不要现在整理标签并补充当前页的小知识点？</div>
       <div class="prompt-actions">
         <button class="chip chip-gradient" @click="emit('classifyNow')">
-          <i class="fa-solid fa-bolt" aria-hidden="true" />
+          <font-awesome-icon icon="bolt" />
           立即分类标签
         </button>
         <button class="chip" @click="emit('dismissBookmarkPrompt')">
-          <i class="fa-solid fa-clock" aria-hidden="true" />
+          <font-awesome-icon icon="clock" />
           稍后
         </button>
       </div>
@@ -69,7 +69,7 @@ const promptRight = computed(() =>
       :style="{ right: floatingButtonRight }"
       title="切换页面知识侧边栏"
       @click="emit('toggleSidebar')">
-      <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true" />
+      <font-awesome-icon icon="wand-magic-sparkles" />
     </button>
 
     <aside
@@ -84,7 +84,7 @@ const promptRight = computed(() =>
           </div>
         </div>
         <button class="chip" @click="emit('toggleSidebar')">
-          <i class="fa-solid fa-chevron-right" aria-hidden="true" />
+          <font-awesome-icon icon="chevron-right" />
           收起
         </button>
       </div>
@@ -92,11 +92,11 @@ const promptRight = computed(() =>
 
       <div class="toolbar">
         <button class="chip chip-gradient" @click="emit('captureSelection')">
-          <i class="fa-solid fa-highlighter" aria-hidden="true" />
+          <font-awesome-icon icon="highlighter" />
           抓取当前选中
         </button>
         <button class="chip" @click="emit('toggleElementMode')">
-          <i class="fa-solid fa-vector-square" aria-hidden="true" />
+          <font-awesome-icon icon="vector-square" />
           {{ state.elementPickMode ? "退出框选模式" : "开启框选模式" }}
         </button>
       </div>
@@ -123,11 +123,11 @@ const promptRight = computed(() =>
         <div class="footer-text">模型配置和书签整理保留在管理页中</div>
         <div class="footer-actions">
           <button class="chip" @click="emit('openOptions')">
-            <i class="fa-solid fa-gear" aria-hidden="true" />
+            <font-awesome-icon icon="gear" />
             模型配置
           </button>
           <button class="chip" @click="emit('openHistory')">
-            <i class="fa-solid fa-bookmark" aria-hidden="true" />
+            <font-awesome-icon icon="bookmark" />
             书签整理
           </button>
         </div>
@@ -143,9 +143,8 @@ const promptRight = computed(() =>
   inset: 0;
   pointer-events: none;
   z-index: 2147483646;
-  font-family: "SF Pro Text", "Segoe UI", "PingFang SC", "Hiragino Sans GB",
-    sans-serif;
-  font-size: 14px;
+  font-family: var(--sf-font-family);
+  font-size: var(--sf-font-size-md);
 }
 
 .overlay-root,
@@ -162,23 +161,23 @@ const promptRight = computed(() =>
   top: 86px;
   pointer-events: auto;
   max-width: 240px;
-  border-radius: 18px;
-  padding: 14px 14px 12px;
+  border-radius: var(--sf-radius-lg);
+  padding: var(--sf-space-3) var(--sf-space-3) var(--sf-space-2);
   background: linear-gradient(135deg, #fff9ff 0%, #f4fbff 55%, #edf8ff 100%);
   border: 1px solid rgba(132, 174, 224, 0.24);
   box-shadow: 0 18px 34px rgba(93, 118, 164, 0.18);
 }
 
 .prompt-title {
-  font-size: 14px;
+  font-size: var(--sf-font-size-md);
   font-weight: 800;
   color: #2b3962;
   margin-bottom: 6px;
 }
 
 .prompt-text {
-  font-size: 13px;
-  line-height: 1.6;
+  font-size: var(--sf-font-size-sm);
+  line-height: var(--sf-line-height-relaxed);
   color: #6d7994;
   margin-bottom: 10px;
 }
@@ -186,7 +185,7 @@ const promptRight = computed(() =>
 .prompt-actions,
 .footer-actions {
   display: flex;
-  gap: 8px;
+  gap: var(--sf-space-2);
 }
 
 .floating-ball {
@@ -246,7 +245,7 @@ const promptRight = computed(() =>
 }
 
 .sidebar-head {
-  padding: 18px 18px 14px;
+  padding: var(--sf-space-4) var(--sf-space-4) var(--sf-space-3);
   border-bottom: 1px solid rgba(136, 176, 224, 0.14);
   background: linear-gradient(
     135deg,
@@ -256,11 +255,11 @@ const promptRight = computed(() =>
   );
   display: flex;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--sf-space-3);
 }
 
 .sidebar-eyebrow {
-  font-size: 12px;
+  font-size: var(--sf-font-size-xs);
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: #7d88b1;
@@ -268,46 +267,47 @@ const promptRight = computed(() =>
 }
 
 .sidebar-title {
-  font-size: 22px;
+  font-size: var(--sf-font-size-xl);
   line-height: 1.05;
   font-weight: 900;
   color: #25324d;
-  margin-top: 6px;
+  margin-top: var(--sf-space-1);
 }
 
 .sidebar-subtitle {
-  font-size: 13px;
-  line-height: 1.6;
+  font-size: var(--sf-font-size-sm);
+  line-height: var(--sf-line-height-relaxed);
   color: #6e7997;
-  margin-top: 8px;
+  margin-top: var(--sf-space-2);
 }
 
 .sidebar-status {
-  padding: 12px 18px 0;
-  font-size: 13px;
-  line-height: 1.6;
+  padding: var(--sf-space-3) var(--sf-space-4) 0;
+  font-size: var(--sf-font-size-sm);
+  line-height: var(--sf-line-height-relaxed);
   color: #65728f;
 }
 
 .toolbar {
-  padding: 16px 16px 0;
+  padding: var(--sf-space-4) var(--sf-space-4) 0;
   display: flex;
-  gap: 8px;
+  gap: var(--sf-space-2);
   flex-wrap: wrap;
 }
 
 .chip {
   border: 0;
   border-radius: 999px;
-  padding: 9px 12px;
+  min-height: var(--sf-button-height);
+  padding: 0 var(--sf-space-3);
   background: #eef4ff;
   color: #657899;
-  font-size: 12px;
+  font-size: var(--sf-font-size-xs);
   font-weight: 800;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--sf-space-1);
 }
 
 .chip-gradient {
@@ -316,58 +316,58 @@ const promptRight = computed(() =>
 }
 
 .selection-panel {
-  margin: 14px 16px 0;
-  border-radius: 18px;
-  padding: 12px 13px;
+  margin: var(--sf-space-3) var(--sf-space-4) 0;
+  border-radius: var(--sf-radius-lg);
+  padding: var(--sf-space-3);
   background: linear-gradient(135deg, #fff1fa 0%, #eef9ff 100%);
   border: 1px solid rgba(150, 195, 235, 0.18);
 }
 
 .selection-label {
-  font-size: 12px;
+  font-size: var(--sf-font-size-xs);
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: #7c86ad;
-  margin-bottom: 6px;
+  margin-bottom: var(--sf-space-1);
 }
 
 .selection-text {
-  font-size: 13px;
+  font-size: var(--sf-font-size-sm);
   line-height: 1.65;
   color: #31415f;
 }
 
 .snippet-list {
-  padding: 14px 16px 16px;
+  padding: var(--sf-space-3) var(--sf-space-4) var(--sf-space-4);
   overflow: auto;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--sf-space-3);
   flex: 1;
 }
 
 .empty-state {
-  border-radius: 20px;
-  padding: 16px;
+  border-radius: var(--sf-radius-xl);
+  padding: var(--sf-space-4);
   background: rgba(255, 255, 255, 0.7);
   border: 1px dashed rgba(126, 169, 220, 0.28);
-  font-size: 13px;
+  font-size: var(--sf-font-size-sm);
   line-height: 1.7;
   color: #72809e;
 }
 
 .sidebar-footer {
-  padding: 12px 16px 16px;
+  padding: var(--sf-space-3) var(--sf-space-4) var(--sf-space-4);
   border-top: 1px solid rgba(136, 176, 224, 0.12);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 8px;
+  gap: var(--sf-space-2);
 }
 
 .footer-text {
-  font-size: 12px;
+  font-size: var(--sf-font-size-xs);
   color: #8591ac;
 }
 </style>

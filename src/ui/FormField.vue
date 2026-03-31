@@ -16,20 +16,20 @@ defineProps<{
 <style scoped>
 .form-field {
   display: block;
-  margin-bottom: 14px;
+  margin-bottom: var(--sf-space-3);
 }
 
 .form-label {
   color: #44506a;
-  font-size: 14px;
+  font-size: var(--sf-font-size-md);
   font-weight: 700;
-  margin-bottom: 6px;
+  margin-bottom: var(--sf-space-1);
 }
 
 .form-hint {
-  color: #627089;
-  font-size: 13px;
-  margin-bottom: 6px;
-  line-height: 1.5;
+  color: var(--sf-color-text-muted);
+  font-size: var(--sf-font-size-sm);
+  margin-bottom: var(--sf-space-1);
+  line-height: var(--sf-line-height-normal);
 }
 </style>

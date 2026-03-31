@@ -31,7 +31,7 @@ const onSelect = () => {
         }}</span>
       </div>
       <div class="muted">
-        <i class="fa-solid fa-folder-open" aria-hidden="true" />
+        <font-awesome-icon icon="folder-open" />
         {{ suggestion.path }}
       </div>
       <div class="reason">{{ suggestion.reason }}</div>
@@ -41,12 +41,12 @@ const onSelect = () => {
 
 <style scoped>
 .suggestion {
-  border: 1px solid rgba(23, 32, 51, 0.08);
-  background: #fff;
-  border-radius: 14px;
-  padding: 12px;
+  border: 1px solid var(--sf-color-border);
+  background: var(--sf-color-surface);
+  border-radius: var(--sf-radius-md);
+  padding: var(--sf-space-3);
   display: flex;
-  gap: 10px;
+  gap: var(--sf-space-2);
 }
 
 .suggestion.active {
@@ -62,22 +62,22 @@ const onSelect = () => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 8px;
+  gap: var(--sf-space-2);
+  margin-bottom: var(--sf-space-2);
 }
 
 .muted {
-  color: #627089;
-  font-size: 13px;
-  line-height: 1.5;
+  color: var(--sf-color-text-muted);
+  font-size: var(--sf-font-size-sm);
+  line-height: var(--sf-line-height-normal);
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--sf-space-1);
 }
 
 .reason {
-  font-size: 13px;
-  margin-top: 8px;
-  line-height: 1.5;
+  font-size: var(--sf-font-size-sm);
+  margin-top: var(--sf-space-2);
+  line-height: var(--sf-line-height-normal);
 }
 </style>

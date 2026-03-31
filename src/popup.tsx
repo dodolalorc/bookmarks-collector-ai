@@ -1,7 +1,10 @@
 import { createApp } from "vue"
 
-import "@fortawesome/fontawesome-free/css/all.min.css"
+import "./ui/design-tokens.css"
 
+import { registerFontAwesome } from "./ui/fontawesome"
 import PopupApp from "./views/PopupApp.vue"
 
-createApp(PopupApp).mount("#__plasmo")
+const app = createApp(PopupApp)
+registerFontAwesome(app)
+app.mount("#__plasmo")

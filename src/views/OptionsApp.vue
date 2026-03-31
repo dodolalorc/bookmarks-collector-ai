@@ -132,13 +132,13 @@ const switchTab = (next: "settings" | "history") => {
         <BaseButton
           :variant="tab === 'settings' ? 'primary' : 'secondary'"
           @click="switchTab('settings')">
-          <i class="fa-solid fa-gear" aria-hidden="true" />
+          <font-awesome-icon icon="gear" />
           模型配置
         </BaseButton>
         <BaseButton
           :variant="tab === 'history' ? 'primary' : 'secondary'"
           @click="switchTab('history')">
-          <i class="fa-solid fa-bookmark" aria-hidden="true" />
+          <font-awesome-icon icon="bookmark" />
           历史整理
         </BaseButton>
       </div>
@@ -238,7 +238,7 @@ const switchTab = (next: "settings" | "history") => {
               }
             })
           ">
-          <i class="fa-solid fa-rotate-left" aria-hidden="true" />
+          <font-awesome-icon icon="rotate-left" />
           恢复默认模板
         </BaseButton>
       </BaseCard>
@@ -294,11 +294,11 @@ const switchTab = (next: "settings" | "history") => {
         <div class="status">{{ status }}</div>
         <div class="button-row">
           <BaseButton @click="exportBackup">
-            <i class="fa-solid fa-file-export" aria-hidden="true" />
+            <font-awesome-icon icon="file-export" />
             导出备份
           </BaseButton>
           <BaseButton variant="primary" @click="saveSettings">
-            <i class="fa-solid fa-floppy-disk" aria-hidden="true" />
+            <font-awesome-icon icon="floppy-disk" />
             保存配置
           </BaseButton>
         </div>
@@ -311,11 +311,11 @@ const switchTab = (next: "settings" | "history") => {
           <SectionHeader compact title="历史书签批量整理" />
           <div class="button-row">
             <BaseButton @click="refreshHistory">
-              <i class="fa-solid fa-arrows-rotate" aria-hidden="true" />
+              <font-awesome-icon icon="arrows-rotate" />
               刷新推荐
             </BaseButton>
             <BaseButton variant="primary" @click="applySelected">
-              <i class="fa-solid fa-check" aria-hidden="true" />
+              <font-awesome-icon icon="check" />
               应用选中项
             </BaseButton>
           </div>
@@ -342,17 +342,16 @@ const switchTab = (next: "settings" | "history") => {
   min-height: 100vh;
   padding: 32px;
   background: linear-gradient(135deg, #f3f7ff 0%, #fff8e8 45%, #fff 100%);
-  color: #172033;
-  font-size: 15px;
-  font-family: "SF Pro Display", "Segoe UI", "PingFang SC", "Hiragino Sans GB",
-    sans-serif;
+  color: var(--sf-color-text);
+  font-size: var(--sf-font-size-md);
+  font-family: var(--sf-font-family);
 }
 
 :deep(.base-card) {
   max-width: 1100px;
-  margin: 0 auto 20px;
-  padding: 24px;
-  border-radius: 20px;
+  margin: 0 auto var(--sf-space-5);
+  padding: var(--sf-space-6);
+  border-radius: var(--sf-radius-xl);
 }
 
 .panel-head,
@@ -361,54 +360,56 @@ const switchTab = (next: "settings" | "history") => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 16px;
+  gap: var(--sf-space-4);
 }
 
 .tab-actions,
 .button-row {
   display: flex;
-  gap: 12px;
+  gap: var(--sf-space-3);
 }
 
 .eyebrow {
-  font-size: 12px;
+  font-size: var(--sf-font-size-xs);
   font-weight: 800;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: #627089;
+  color: var(--sf-color-text-muted);
 }
 
 .title {
-  font-size: 28px;
+  font-size: var(--sf-font-size-2xl);
   font-weight: 800;
-  margin-top: 6px;
+  margin-top: var(--sf-space-1);
 }
 
 .field {
   width: 100%;
-  padding: 12px 14px;
-  border-radius: 14px;
+  min-height: var(--sf-button-height);
+  padding: var(--sf-space-3) var(--sf-space-4);
+  border-radius: var(--sf-radius-md);
   border: 1px solid #d7deea;
   box-sizing: border-box;
-  font-size: 15px;
-  background: #fff;
+  font-size: var(--sf-font-size-md);
+  background: var(--sf-color-surface);
   resize: vertical;
 }
 
 .check-item {
   display: flex;
-  gap: 10px;
-  margin-bottom: 12px;
+  gap: var(--sf-space-2);
+  margin-bottom: var(--sf-space-3);
+  font-size: var(--sf-font-size-sm);
 }
 
 .status {
-  color: #627089;
-  font-size: 14px;
+  color: var(--sf-color-text-muted);
+  font-size: var(--sf-font-size-md);
 }
 
 .history-list {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: var(--sf-space-3);
 }
 </style>

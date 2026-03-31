@@ -24,37 +24,37 @@ withDefaults(
 
 <style scoped>
 .section-header {
-  margin-bottom: 12px;
+  margin-bottom: var(--sf-space-3);
 }
 
 .section-header--compact {
-  margin-bottom: 8px;
+  margin-bottom: var(--sf-space-2);
 }
 
 .section-eyebrow {
-  font-size: 11px;
+  font-size: var(--sf-font-size-xs);
   letter-spacing: 0.12em;
   text-transform: uppercase;
   font-weight: 800;
   color: #7a88a6;
-  margin-bottom: 6px;
+  margin-bottom: var(--sf-space-1);
 }
 
 .section-title {
   margin: 0;
-  font-size: 20px;
-  line-height: 1.2;
-  color: #172033;
+  font-size: var(--sf-font-size-xl);
+  line-height: var(--sf-line-height-tight);
+  color: var(--sf-color-text);
 }
 
 .section-header--compact .section-title {
-  font-size: 18px;
+  font-size: var(--sf-font-size-lg);
 }
 
 .section-subtitle {
-  margin: 8px 0 0;
-  font-size: 13px;
-  line-height: 1.6;
-  color: #627089;
+  margin: var(--sf-space-2) 0 0;
+  font-size: var(--sf-font-size-sm);
+  line-height: var(--sf-line-height-relaxed);
+  color: var(--sf-color-text-muted);
 }
 </style>

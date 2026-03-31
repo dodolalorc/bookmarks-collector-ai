@@ -22,11 +22,11 @@ const onToggle = () => {
       <div>
         <div class="item-title">{{ item.bookmark.title }}</div>
         <div class="item-url">
-          <i class="fa-solid fa-link" aria-hidden="true" />
+          <font-awesome-icon icon="link" />
           {{ item.bookmark.url }}
         </div>
         <div class="item-path">
-          <i class="fa-solid fa-folder-tree" aria-hidden="true" />
+          <font-awesome-icon icon="folder-tree" />
           当前目录：{{ item.bookmark.parentPath || "未识别" }}
         </div>
         <div class="target">
@@ -49,10 +49,10 @@ const onToggle = () => {
 <style scoped>
 .history-item {
   display: block;
-  border: 1px solid rgba(23, 32, 51, 0.08);
-  border-radius: 16px;
-  padding: 14px;
-  background: #fff;
+  border: 1px solid var(--sf-color-border);
+  border-radius: var(--sf-radius-lg);
+  padding: var(--sf-space-3);
+  background: var(--sf-color-surface);
 }
 
 .history-item.selected {
@@ -62,38 +62,38 @@ const onToggle = () => {
 
 .history-main {
   display: flex;
-  gap: 10px;
+  gap: var(--sf-space-2);
 }
 
 .item-title {
   font-weight: 800;
-  margin-bottom: 6px;
+  margin-bottom: var(--sf-space-1);
 }
 
 .item-url {
-  font-size: 13px;
-  color: #627089;
-  margin-bottom: 8px;
+  font-size: var(--sf-font-size-sm);
+  color: var(--sf-color-text-muted);
+  margin-bottom: var(--sf-space-2);
   word-break: break-all;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--sf-space-1);
 }
 
 .item-path {
-  font-size: 13px;
-  color: #627089;
-  margin-bottom: 8px;
+  font-size: var(--sf-font-size-sm);
+  color: var(--sf-color-text-muted);
+  margin-bottom: var(--sf-space-2);
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--sf-space-1);
 }
 
 .target {
-  border-radius: 12px;
-  background: #f6f8fb;
-  padding: 10px;
-  font-size: 13px;
-  line-height: 1.6;
+  border-radius: var(--sf-radius-md);
+  background: var(--sf-color-surface-soft);
+  padding: var(--sf-space-2);
+  font-size: var(--sf-font-size-sm);
+  line-height: var(--sf-line-height-relaxed);
 }
 </style>

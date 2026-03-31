@@ -25,13 +25,16 @@ withDefaults(
 <style scoped>
 .base-button {
   border: 0;
-  border-radius: 12px;
-  padding: 11px 16px;
-  font-size: 14px;
+  border-radius: var(--sf-radius-md);
+  min-height: var(--sf-button-height);
+  padding: 0 var(--sf-button-padding-x);
+  font-size: var(--sf-font-size-md);
   font-weight: 700;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
+  gap: var(--sf-space-2);
+  line-height: var(--sf-line-height-tight);
   cursor: pointer;
 }
 
@@ -41,17 +44,17 @@ withDefaults(
 }
 
 .base-button--primary {
-  background: #172033;
-  color: #fff;
+  background: var(--sf-color-primary);
+  color: var(--sf-color-surface);
 }
 
 .base-button--secondary {
   background: #eef4ff;
-  color: #172033;
+  color: var(--sf-color-text);
 }
 
 .base-button--accent {
-  background: #ffb84d;
-  color: #172033;
+  background: var(--sf-color-accent);
+  color: var(--sf-color-text);
 }
 </style>

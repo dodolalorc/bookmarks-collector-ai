@@ -248,7 +248,7 @@ const quickCapture = async () => {
             title="AI 智能书签分类助手"
             subtitle="优先推荐，不自动替你改结构。你确认后，插件才会移动或创建书签。" />
           <BaseButton variant="primary" @click="refreshCapture">
-            <i class="fa-solid fa-rotate-right" aria-hidden="true" />
+            <font-awesome-icon icon="rotate-right" />
             重新抓取
           </BaseButton>
         </div>
@@ -268,7 +268,7 @@ const quickCapture = async () => {
         <BaseButton
           :disabled="isLoading || !capture?.page.url"
           @click="quickCapture">
-          <i class="fa-solid fa-bolt" aria-hidden="true" />
+          <font-awesome-icon icon="bolt" />
           一键抓取
         </BaseButton>
       </BaseCard>
@@ -313,7 +313,7 @@ const quickCapture = async () => {
             :disabled="!canRecommend || isLoading"
             variant="accent"
             @click="runRecommendation">
-            <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true" />
+            <font-awesome-icon icon="wand-magic-sparkles" />
             开始推荐
           </BaseButton>
         </div>
@@ -336,7 +336,7 @@ const quickCapture = async () => {
             :disabled="isLoading || !selectedSuggestion"
             variant="primary"
             @click="applyRecommendation">
-            <i class="fa-solid fa-folder-tree" aria-hidden="true" />
+            <font-awesome-icon icon="folder-tree" />
             确认并写入书签
           </BaseButton>
         </div>
@@ -360,63 +360,62 @@ const quickCapture = async () => {
 .panel {
   width: 460px;
   min-height: 700px;
-  padding: 18px;
+  padding: var(--sf-space-4);
   background: radial-gradient(
     circle at top left,
     #fff6df 0%,
     #fffdf7 35%,
     #f4f7fb 100%
   );
-  color: #172033;
-  font-family: "SF Pro Text", "Segoe UI", "PingFang SC", "Hiragino Sans GB",
-    sans-serif;
+  color: var(--sf-color-text);
+  font-family: var(--sf-font-family);
 }
 
 .stack {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: var(--sf-space-3);
 }
 
 .hero {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: 12px;
+  gap: var(--sf-space-3);
 }
 
 .muted {
-  color: #627089;
-  font-size: 13px;
-  line-height: 1.5;
+  color: var(--sf-color-text-muted);
+  font-size: var(--sf-font-size-sm);
+  line-height: var(--sf-line-height-normal);
 }
 
 .quick-facts {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 8px;
-  margin-bottom: 12px;
+  gap: var(--sf-space-2);
+  margin-bottom: var(--sf-space-3);
 }
 
 .quick-fact-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 8px;
-  border: 1px solid #e6edf6;
-  border-radius: 10px;
-  padding: 8px 10px;
+  gap: var(--sf-space-2);
+  border: 1px solid var(--sf-color-border);
+  border-radius: var(--sf-radius-sm);
+  padding: var(--sf-space-2) var(--sf-space-3);
   background: #fafcff;
 }
 
 .quick-fact-label {
-  font-size: 13px;
+  font-size: var(--sf-font-size-sm);
   font-weight: 700;
   color: #4c5a76;
 }
 
 .quick-fact-value {
-  font-size: 13px;
+  font-size: var(--sf-font-size-sm);
   color: #1f2d46;
 }
 
@@ -424,43 +423,44 @@ const quickCapture = async () => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 8px;
+  gap: var(--sf-space-2);
+  margin-bottom: var(--sf-space-2);
 }
 
 .title {
-  font-size: 16px;
+  font-size: var(--sf-font-size-lg);
   font-weight: 700;
-  margin-bottom: 6px;
+  margin-bottom: var(--sf-space-1);
 }
 
 .break {
   word-break: break-all;
-  margin-bottom: 10px;
+  margin-bottom: var(--sf-space-2);
 }
 
 .field {
   width: 100%;
-  padding: 10px 12px;
-  border-radius: 12px;
+  min-height: var(--sf-button-height);
+  padding: var(--sf-space-2) var(--sf-space-3);
+  border-radius: var(--sf-radius-md);
   border: 1px solid #cfd8e3;
-  background: #fff;
+  background: var(--sf-color-surface);
   box-sizing: border-box;
-  font-size: 14px;
-  color: #172033;
+  font-size: var(--sf-font-size-md);
+  color: var(--sf-color-text);
   resize: vertical;
-  margin-top: 6px;
+  margin-top: var(--sf-space-1);
 }
 
 .suggestions {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--sf-space-2);
 }
 
 .status {
-  font-size: 14px;
-  line-height: 1.6;
-  margin-top: 8px;
+  font-size: var(--sf-font-size-md);
+  line-height: var(--sf-line-height-relaxed);
+  margin-top: var(--sf-space-2);
 }
 </style>
