@@ -37,6 +37,12 @@ type OverlayState = {
   status: string
   bookmarkPromptVisible: boolean
   selectionText: string
+  selectionAnchorVisible: boolean
+  selectionAnchorHovered: boolean
+  selectionAnchor: {
+    top: number
+    left: number
+  }
 }
 
 const state = reactive<OverlayState>({
@@ -49,7 +55,13 @@ const state = reactive<OverlayState>({
   elementPickMode: false,
   status: "等待抓取",
   bookmarkPromptVisible: false,
-  selectionText: ""
+  selectionText: "",
+  selectionAnchorVisible: false,
+  selectionAnchorHovered: false,
+  selectionAnchor: {
+    top: 0,
+    left: 0
+  }
 })
 
 let overlayMounted = false
@@ -189,6 +201,16 @@ const renderOverlay = () => {
     onDismissBookmarkPrompt: () => {
       state.bookmarkPromptVisible = false
       renderOverlay()
+    },
+    onShowSelectionPrompt: () => {
+      state.selectionAnchorHovered = true
+      renderOverlay()
+    },
+    onHideSelectionPrompt: () => {
+      window.setTimeout(() => {
+        state.selectionAnchorHovered = false
+        renderOverlay()
+      }, 120)
     }
   })
 
@@ -208,6 +230,37 @@ const captureSelection = async () => {
   await storeSnippet(createSnippet("selection", text.slice(0, 2000), "selection"))
   state.status = "已把选中文本加入当前书签页知识列表。"
   state.sidebarOpen = true
+  state.selectionAnchorVisible = false
+  state.selectionAnchorHovered = false
+  renderOverlay()
+}
+
+const updateSelectionAnchor = () => {
+  const selection = window.getSelection?.()
+  const text = selection?.toString().trim() ?? ""
+
+  if (!selection || selection.rangeCount === 0 || text.length < 2) {
+    state.selectionAnchorVisible = false
+    state.selectionAnchorHovered = false
+    renderOverlay()
+    return
+  }
+
+  const range = selection.getRangeAt(0).cloneRange()
+  const rects = range.getClientRects()
+  const lastRect = rects[rects.length - 1]
+
+  if (!lastRect) {
+    state.selectionAnchorVisible = false
+    state.selectionAnchorHovered = false
+    renderOverlay()
+    return
+  }
+
+  state.selectionText = text
+  state.selectionAnchorVisible = true
+  state.selectionAnchor.top = Math.min(lastRect.bottom + 10, window.innerHeight - 18)
+  state.selectionAnchor.left = Math.min(lastRect.right + 8, window.innerWidth - 18)
   renderOverlay()
 }
 
@@ -276,6 +329,35 @@ const bindElementPicker = () => {
 }
 
 ensureCaptureStyles()
+
+document.addEventListener("selectionchange", () => {
+  window.requestAnimationFrame(updateSelectionAnchor)
+})
+
+document.addEventListener(
+  "mousedown",
+  (event) => {
+    const target = event.target
+    if (target instanceof Element && target.closest(`#${ROOT_ID}`)) {
+      return
+    }
+
+    if (state.selectionAnchorHovered) {
+      return
+    }
+
+    state.selectionAnchorVisible = false
+    state.selectionAnchorHovered = false
+    renderOverlay()
+  },
+  true
+)
+
+window.addEventListener("scroll", () => {
+  if (state.selectionAnchorVisible) {
+    updateSelectionAnchor()
+  }
+})
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message?.type === "smart-favorites/capture-page") {

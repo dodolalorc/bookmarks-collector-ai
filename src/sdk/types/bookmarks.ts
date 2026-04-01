@@ -25,3 +25,33 @@ export interface BookmarkMutationResult {
     bookmark: chrome.bookmarks.BookmarkTreeNode
     message: string
 }
+
+export interface SnippetCollectionFolder {
+    id: string
+    name: string
+    description?: string
+    isDefault?: boolean
+    createdAt: string
+    updatedAt: string
+}
+
+export interface SnippetCollectionItem {
+    id: string
+    folderId: string
+    sourceUrl: string
+    snippetId?: string
+    title: string
+    text: string
+    originalText: string
+    mode: "selection" | "element"
+    selector?: string
+    analysisSummary?: string
+    analysisTags?: string[]
+    createdAt: string
+    updatedAt: string
+}
+
+export interface SnippetCollectionState {
+    folders: SnippetCollectionFolder[]
+    items: SnippetCollectionItem[]
+}

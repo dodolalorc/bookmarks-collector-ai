@@ -5,12 +5,22 @@ import type {
   BookmarkMutationResult,
   BulkBookmarkApplyResult,
   CapturePageResponse,
+  CollectionFolderMutationResult,
+  CollectionItemMutationResult,
   CapturedSnippet,
+  CreateCollectionItemPayload,
+  CreateCollectionFolderPayload,
+  DeleteCollectionFolderPayload,
+  DeleteCollectionItemPayload,
   ExportSnapshot,
   HistoryRecommendationItem,
+  MoveCollectionItemPayload,
   RecommendationInput,
   RecommendationResult,
-  SmartFavoritesSettings
+  SnippetCollectionState,
+  SmartFavoritesSettings,
+  UpdateCollectionFolderPayload,
+  UpdateCollectionItemPayload
 } from "~/src/sdk/types"
 
 async function sendRuntimeMessage<T>(type: string, payload?: unknown): Promise<T> {
@@ -121,6 +131,61 @@ export class SmartFavoritesSDK {
     return sendRuntimeMessage<{ success: boolean }>(
       "smart-favorites/open-extension-page",
       { path }
+    )
+  }
+
+  async getSnippetCollections() {
+    return sendRuntimeMessage<SnippetCollectionState>(
+      "smart-favorites/get-snippet-collections"
+    )
+  }
+
+  async createSnippetFolder(payload: CreateCollectionFolderPayload) {
+    return sendRuntimeMessage<CollectionFolderMutationResult>(
+      "smart-favorites/create-snippet-folder",
+      payload
+    )
+  }
+
+  async updateSnippetFolder(payload: UpdateCollectionFolderPayload) {
+    return sendRuntimeMessage<CollectionFolderMutationResult>(
+      "smart-favorites/update-snippet-folder",
+      payload
+    )
+  }
+
+  async deleteSnippetFolder(payload: DeleteCollectionFolderPayload) {
+    return sendRuntimeMessage<CollectionFolderMutationResult>(
+      "smart-favorites/delete-snippet-folder",
+      payload
+    )
+  }
+
+  async updateSnippetCollectionItem(payload: UpdateCollectionItemPayload) {
+    return sendRuntimeMessage<CollectionItemMutationResult>(
+      "smart-favorites/update-snippet-item",
+      payload
+    )
+  }
+
+  async createSnippetCollectionItem(payload: CreateCollectionItemPayload) {
+    return sendRuntimeMessage<CollectionItemMutationResult>(
+      "smart-favorites/create-snippet-item",
+      payload
+    )
+  }
+
+  async moveSnippetCollectionItem(payload: MoveCollectionItemPayload) {
+    return sendRuntimeMessage<CollectionItemMutationResult>(
+      "smart-favorites/move-snippet-item",
+      payload
+    )
+  }
+
+  async deleteSnippetCollectionItem(payload: DeleteCollectionItemPayload) {
+    return sendRuntimeMessage<CollectionItemMutationResult>(
+      "smart-favorites/delete-snippet-item",
+      payload
     )
   }
 }

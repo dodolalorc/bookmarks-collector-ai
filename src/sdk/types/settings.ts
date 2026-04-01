@@ -1,4 +1,5 @@
 import type { BookmarkFolder } from "./bookmarks"
+import type { SnippetCollectionState } from "./bookmarks"
 import type { PageCaptureDraft } from "./page"
 
 export interface AiProviderSettings {
@@ -41,4 +42,5 @@ export interface ExportSnapshot {
     knowledge: KnowledgeRecord[]
     folders: BookmarkFolder[]
     drafts: PageCaptureDraft[]
+    collections: SnippetCollectionState
 }

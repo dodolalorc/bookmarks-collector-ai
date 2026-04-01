@@ -1,4 +1,8 @@
-import type { BookmarkItem, BookmarkMutationResult } from "./bookmarks"
+import type {
+    BookmarkItem,
+    BookmarkMutationResult,
+    SnippetCollectionState
+} from "./bookmarks"
 import type { PageContext } from "./page"
 
 export type RecommendationSource = "heuristic" | "ai"
@@ -53,4 +57,51 @@ export interface BulkBookmarkApplyPayload {
 export interface BulkBookmarkApplyResult {
     moved: number
     results: BookmarkMutationResult[]
+}
+
+export interface CreateCollectionFolderPayload {
+    name: string
+    description?: string
+}
+
+export interface UpdateCollectionFolderPayload {
+    folderId: string
+    name: string
+    description?: string
+}
+
+export interface DeleteCollectionFolderPayload {
+    folderId: string
+}
+
+export interface UpdateCollectionItemPayload {
+    itemId: string
+    title: string
+    text: string
+}
+
+export interface CreateCollectionItemPayload {
+    folderId: string
+    title: string
+    text: string
+    sourceUrl?: string
+}
+
+export interface MoveCollectionItemPayload {
+    itemId: string
+    folderId: string
+}
+
+export interface DeleteCollectionItemPayload {
+    itemId: string
+}
+
+export interface CollectionFolderMutationResult {
+    collections: SnippetCollectionState
+    folderId: string
+}
+
+export interface CollectionItemMutationResult {
+    collections: SnippetCollectionState
+    itemId: string
 }

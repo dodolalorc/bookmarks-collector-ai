@@ -11,13 +11,21 @@ import {
   extractAiRecommendations
 } from "~/src/sdk/provider"
 import {
+  addSnippetCollectionItem,
   addCapturedSnippet,
   clearCaptureDraft,
+  createSnippetFolder,
+  deleteSnippetCollectionItem,
+  deleteSnippetFolder,
   getCaptureDraft,
+  getSnippetCollections,
   getSettings,
+  moveSnippetCollectionItem,
   pushKnowledgeRecord,
   removeCapturedSnippet,
   saveSettings,
+  updateSnippetCollectionItem,
+  updateSnippetFolder,
   updateCapturedSnippet
 } from "~/src/sdk/storage"
 import type {
@@ -26,14 +34,23 @@ import type {
   BulkBookmarkApplyPayload,
   BulkBookmarkApplyResult,
   CapturedSnippet,
+  CollectionFolderMutationResult,
+  CollectionItemMutationResult,
+  CreateCollectionItemPayload,
+  CreateCollectionFolderPayload,
+  DeleteCollectionFolderPayload,
+  DeleteCollectionItemPayload,
   ExtensionPageOpenPayload,
   ExportSnapshot,
   HistoryRecommendationItem,
   HistoryRecommendationRequest,
+  MoveCollectionItemPayload,
   PageCaptureDraft,
   RecommendationInput,
   RecommendationResult,
-  SmartFavoritesSettings
+  SmartFavoritesSettings,
+  UpdateCollectionFolderPayload,
+  UpdateCollectionItemPayload
 } from "~/src/sdk/types"
 
 chrome.bookmarks.onCreated.addListener((_, node) => {
@@ -110,6 +127,22 @@ async function handleMessage(message: { type: string; payload?: unknown }) {
       return handleApplyBulkBookmarks(message.payload as BulkBookmarkApplyPayload)
     case "smart-favorites/open-extension-page":
       return handleOpenExtensionPage(message.payload as ExtensionPageOpenPayload)
+    case "smart-favorites/get-snippet-collections":
+      return getSnippetCollections()
+    case "smart-favorites/create-snippet-folder":
+      return handleCreateSnippetFolder(message.payload as CreateCollectionFolderPayload)
+    case "smart-favorites/update-snippet-folder":
+      return handleUpdateSnippetFolder(message.payload as UpdateCollectionFolderPayload)
+    case "smart-favorites/delete-snippet-folder":
+      return handleDeleteSnippetFolder(message.payload as DeleteCollectionFolderPayload)
+    case "smart-favorites/update-snippet-item":
+      return handleUpdateSnippetItem(message.payload as UpdateCollectionItemPayload)
+    case "smart-favorites/create-snippet-item":
+      return handleCreateSnippetItem(message.payload as CreateCollectionItemPayload)
+    case "smart-favorites/move-snippet-item":
+      return handleMoveSnippetItem(message.payload as MoveCollectionItemPayload)
+    case "smart-favorites/delete-snippet-item":
+      return handleDeleteSnippetItem(message.payload as DeleteCollectionItemPayload)
     default:
       throw new Error(`Unsupported message type: ${message.type}`)
   }
@@ -275,6 +308,98 @@ async function handleOpenExtensionPage(payload: ExtensionPageOpenPayload) {
   const url = chrome.runtime.getURL(normalizedPath)
   await chrome.tabs.create({ url })
   return { success: true }
+}
+
+async function handleCreateSnippetFolder(
+  payload: CreateCollectionFolderPayload
+): Promise<CollectionFolderMutationResult> {
+  const collections = await createSnippetFolder(payload.name, payload.description)
+  const folder = collections.folders.find((item) => item.name === payload.name.trim())
+
+  return {
+    collections,
+    folderId: folder?.id ?? ""
+  }
+}
+
+async function handleUpdateSnippetFolder(
+  payload: UpdateCollectionFolderPayload
+): Promise<CollectionFolderMutationResult> {
+  const collections = await updateSnippetFolder(payload.folderId, {
+    name: payload.name,
+    description: payload.description
+  })
+
+  return {
+    collections,
+    folderId: payload.folderId
+  }
+}
+
+async function handleDeleteSnippetFolder(
+  payload: DeleteCollectionFolderPayload
+): Promise<CollectionFolderMutationResult> {
+  const collections = await deleteSnippetFolder(payload.folderId)
+
+  return {
+    collections,
+    folderId: payload.folderId
+  }
+}
+
+async function handleUpdateSnippetItem(
+  payload: UpdateCollectionItemPayload
+): Promise<CollectionItemMutationResult> {
+  const collections = await updateSnippetCollectionItem(payload.itemId, {
+    title: payload.title,
+    text: payload.text
+  })
+
+  return {
+    collections,
+    itemId: payload.itemId
+  }
+}
+
+async function handleCreateSnippetItem(
+  payload: CreateCollectionItemPayload
+): Promise<CollectionItemMutationResult> {
+  const collections = await addSnippetCollectionItem({
+    folderId: payload.folderId,
+    sourceUrl: payload.sourceUrl ?? "",
+    title: payload.title.trim(),
+    text: payload.text.trim(),
+    originalText: payload.text.trim(),
+    mode: "selection"
+  })
+  const created = collections.items[0]
+
+  return {
+    collections,
+    itemId: created?.id ?? ""
+  }
+}
+
+async function handleMoveSnippetItem(
+  payload: MoveCollectionItemPayload
+): Promise<CollectionItemMutationResult> {
+  const collections = await moveSnippetCollectionItem(payload.itemId, payload.folderId)
+
+  return {
+    collections,
+    itemId: payload.itemId
+  }
+}
+
+async function handleDeleteSnippetItem(
+  payload: DeleteCollectionItemPayload
+): Promise<CollectionItemMutationResult> {
+  const collections = await deleteSnippetCollectionItem(payload.itemId)
+
+  return {
+    collections,
+    itemId: payload.itemId
+  }
 }
 
 async function handleAnalyzeCapturedSnippet(payload: {

@@ -1,4 +1,8 @@
-import { getAllCaptureDrafts, getKnowledgeRecords } from "~/src/sdk/storage"
+import {
+  getAllCaptureDrafts,
+  getKnowledgeRecords,
+  getSnippetCollections
+} from "~/src/sdk/storage"
 import type {
   ApplyBookmarkPayload,
   BookmarkItem,
@@ -263,9 +267,10 @@ export async function buildExportSnapshot(
   settings: SmartFavoritesSettings,
   folderIndex: FolderIndex
 ): Promise<ExportSnapshot> {
-  const [knowledge, drafts] = await Promise.all([
+  const [knowledge, drafts, collections] = await Promise.all([
     getKnowledgeRecords(),
-    getAllCaptureDrafts()
+    getAllCaptureDrafts(),
+    getSnippetCollections()
   ])
 
   return {
@@ -273,6 +278,7 @@ export async function buildExportSnapshot(
     settings,
     knowledge,
     folders: folderIndex.folders,
-    drafts
+    drafts,
+    collections
   }
 }

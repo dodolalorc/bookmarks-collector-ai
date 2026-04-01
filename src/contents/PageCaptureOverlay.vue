@@ -13,6 +13,12 @@ type OverlayStateView = {
   status: string
   bookmarkPromptVisible: boolean
   selectionText: string
+  selectionAnchorVisible: boolean
+  selectionAnchorHovered: boolean
+  selectionAnchor: {
+    top: number
+    left: number
+  }
 }
 
 const props = defineProps<{
@@ -32,6 +38,8 @@ const emit = defineEmits<{
   openHistory: []
   classifyNow: []
   dismissBookmarkPrompt: []
+  showSelectionPrompt: []
+  hideSelectionPrompt: []
 }>()
 
 const sidebarTransform = computed(() =>
@@ -45,6 +53,16 @@ const floatingButtonRight = computed(() =>
 const promptRight = computed(() =>
   props.state.sidebarOpen ? `${props.sidebarWidth + 72}px` : "72px"
 )
+
+const selectionPromptStyle = computed(() => ({
+  top: `${props.state.selectionAnchor.top + 22}px`,
+  left: `${props.state.selectionAnchor.left - 52}px`
+}))
+
+const selectionDotStyle = computed(() => ({
+  top: `${props.state.selectionAnchor.top}px`,
+  left: `${props.state.selectionAnchor.left}px`
+}))
 </script>
 
 <template>
@@ -63,6 +81,30 @@ const promptRight = computed(() =>
         <button class="chip" @click="emit('dismissBookmarkPrompt')">
           <font-awesome-icon icon="clock" />
           稍后
+        </button>
+      </div>
+    </div>
+
+    <div
+      v-if="state.selectionAnchorVisible"
+      class="selection-anchor-wrap"
+      :style="selectionDotStyle"
+      @mouseenter="emit('showSelectionPrompt')"
+      @mouseleave="emit('hideSelectionPrompt')">
+      <button class="selection-anchor" title="将这段内容加入当前框选内容">
+        <span class="selection-anchor-core"></span>
+      </button>
+      <div
+        v-if="state.selectionAnchorHovered"
+        class="selection-anchor-pop"
+        :style="selectionPromptStyle">
+        <div class="selection-anchor-title">加入当前框选内容</div>
+        <div class="selection-anchor-copy">
+          当前只会出现在选中内容最后一个词的右下角。
+        </div>
+        <button class="chip chip-gradient" @click="emit('captureSelection')">
+          <font-awesome-icon icon="highlighter" />
+          选择加入
         </button>
       </div>
     </div>
@@ -231,6 +273,59 @@ const promptRight = computed(() =>
     0 10px 24px rgba(57, 93, 156, 0.4),
     0 0 0 3px rgba(168, 216, 255, 0.22);
   cursor: pointer;
+}
+
+.selection-anchor-wrap {
+  position: fixed;
+  pointer-events: auto;
+  z-index: 2147483647;
+}
+
+.selection-anchor {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  border: 0;
+  border-radius: 999px;
+  padding: 0;
+  transform: translate(-50%, -50%);
+  background: linear-gradient(135deg, #ff7ecb 0%, #7db6ff 100%);
+  box-shadow:
+    0 6px 16px rgba(87, 114, 193, 0.3),
+    0 0 0 3px rgba(255, 255, 255, 0.92);
+  cursor: pointer;
+}
+
+.selection-anchor-core {
+  display: block;
+  width: 8px;
+  height: 8px;
+  margin: 5px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.95);
+}
+
+.selection-anchor-pop {
+  position: absolute;
+  width: 180px;
+  border-radius: 16px;
+  padding: 12px;
+  background: linear-gradient(180deg, #fff8ff 0%, #f4fbff 100%);
+  border: 1px solid rgba(137, 175, 233, 0.24);
+  box-shadow: 0 18px 34px rgba(85, 106, 155, 0.2);
+}
+
+.selection-anchor-title {
+  font-size: 13px;
+  font-weight: 800;
+  color: #30436d;
+}
+
+.selection-anchor-copy {
+  margin: 6px 0 10px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #6d7994;
 }
 
 .sidebar {
