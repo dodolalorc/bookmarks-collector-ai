@@ -75,73 +75,73 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
 async function handleMessage(message: { type: string; payload?: unknown }) {
   switch (message.type) {
-    case "smart-favorites/get-settings":
+    case "bookmarks-collector/get-settings":
       return getSettings()
-    case "smart-favorites/save-settings":
+    case "bookmarks-collector/save-settings":
       await saveSettings(message.payload as SmartFavoritesSettings)
       return { success: true }
-    case "smart-favorites/recommend":
+    case "bookmarks-collector/recommend":
       return handleRecommendation(message.payload as RecommendationInput)
-    case "smart-favorites/apply-bookmark":
+    case "bookmarks-collector/apply-bookmark":
       return handleApplyBookmark(message.payload as ApplyBookmarkPayload)
-    case "smart-favorites/export-snapshot":
+    case "bookmarks-collector/export-snapshot":
       return handleExport()
-    case "smart-favorites/get-capture-draft":
+    case "bookmarks-collector/get-capture-draft":
       return getCaptureDraft(message.payload as string)
-    case "smart-favorites/add-captured-snippet":
+    case "bookmarks-collector/add-captured-snippet":
       return handleAddCapturedSnippet(
         message.payload as {
           url: string
           snippet: CapturedSnippet
         }
       )
-    case "smart-favorites/remove-captured-snippet":
+    case "bookmarks-collector/remove-captured-snippet":
       return handleRemoveCapturedSnippet(
         message.payload as {
           url: string
           snippetId: string
         }
       )
-    case "smart-favorites/analyze-captured-snippet":
+    case "bookmarks-collector/analyze-captured-snippet":
       return handleAnalyzeCapturedSnippet(
         message.payload as {
           url: string
           snippetId: string
         }
       )
-    case "smart-favorites/analyze-all-captured-snippets":
+    case "bookmarks-collector/analyze-all-captured-snippets":
       return handleAnalyzeAllCapturedSnippets(
         message.payload as {
           url: string
           force?: boolean
         }
       )
-    case "smart-favorites/clear-capture-draft":
+    case "bookmarks-collector/clear-capture-draft":
       await clearCaptureDraft(message.payload as string)
       return { success: true }
-    case "smart-favorites/list-history-bookmarks":
+    case "bookmarks-collector/list-history-bookmarks":
       return handleListHistoryBookmarks(
         message.payload as HistoryRecommendationRequest | undefined
       )
-    case "smart-favorites/apply-bulk-bookmarks":
+    case "bookmarks-collector/apply-bulk-bookmarks":
       return handleApplyBulkBookmarks(message.payload as BulkBookmarkApplyPayload)
-    case "smart-favorites/open-extension-page":
+    case "bookmarks-collector/open-extension-page":
       return handleOpenExtensionPage(message.payload as ExtensionPageOpenPayload)
-    case "smart-favorites/get-snippet-collections":
+    case "bookmarks-collector/get-snippet-collections":
       return getSnippetCollections()
-    case "smart-favorites/create-snippet-folder":
+    case "bookmarks-collector/create-snippet-folder":
       return handleCreateSnippetFolder(message.payload as CreateCollectionFolderPayload)
-    case "smart-favorites/update-snippet-folder":
+    case "bookmarks-collector/update-snippet-folder":
       return handleUpdateSnippetFolder(message.payload as UpdateCollectionFolderPayload)
-    case "smart-favorites/delete-snippet-folder":
+    case "bookmarks-collector/delete-snippet-folder":
       return handleDeleteSnippetFolder(message.payload as DeleteCollectionFolderPayload)
-    case "smart-favorites/update-snippet-item":
+    case "bookmarks-collector/update-snippet-item":
       return handleUpdateSnippetItem(message.payload as UpdateCollectionItemPayload)
-    case "smart-favorites/create-snippet-item":
+    case "bookmarks-collector/create-snippet-item":
       return handleCreateSnippetItem(message.payload as CreateCollectionItemPayload)
-    case "smart-favorites/move-snippet-item":
+    case "bookmarks-collector/move-snippet-item":
       return handleMoveSnippetItem(message.payload as MoveCollectionItemPayload)
-    case "smart-favorites/delete-snippet-item":
+    case "bookmarks-collector/delete-snippet-item":
       return handleDeleteSnippetItem(message.payload as DeleteCollectionItemPayload)
     default:
       throw new Error(`Unsupported message type: ${message.type}`)
@@ -460,7 +460,7 @@ async function notifyBookmarkCreated(url: string) {
       .filter((tab) => typeof tab.id === "number")
       .map((tab) =>
         chrome.tabs.sendMessage(tab.id as number, {
-          type: "smart-favorites/bookmark-created"
+          type: "bookmarks-collector/bookmark-created"
         }).catch(() => undefined)
       )
   )

@@ -81,7 +81,7 @@ const sendMessage = async <T>(type: string, payload?: unknown) => {
 
 const fetchDraft = async () => {
   state.draft = await sendMessage<PageCaptureDraft>(
-    "smart-favorites/get-capture-draft",
+    "bookmarks-collector/get-capture-draft",
     location.href
   )
   renderOverlay()
@@ -89,7 +89,7 @@ const fetchDraft = async () => {
 
 const storeSnippet = async (snippet: CapturedSnippet) => {
   state.draft = await sendMessage<PageCaptureDraft>(
-    "smart-favorites/add-captured-snippet",
+    "bookmarks-collector/add-captured-snippet",
     {
       url: location.href,
       snippet
@@ -100,7 +100,7 @@ const storeSnippet = async (snippet: CapturedSnippet) => {
 
 const removeSnippet = async (snippetId: string) => {
   state.draft = await sendMessage<PageCaptureDraft>(
-    "smart-favorites/remove-captured-snippet",
+    "bookmarks-collector/remove-captured-snippet",
     {
       url: location.href,
       snippetId
@@ -114,7 +114,7 @@ const analyzeSnippet = async (snippetId: string) => {
   renderOverlay()
 
   state.draft = await sendMessage<PageCaptureDraft>(
-    "smart-favorites/analyze-captured-snippet",
+    "bookmarks-collector/analyze-captured-snippet",
     {
       url: location.href,
       snippetId
@@ -130,7 +130,7 @@ const analyzeAllSnippets = async (force = false) => {
   renderOverlay()
 
   state.draft = await sendMessage<PageCaptureDraft>(
-    "smart-favorites/analyze-all-captured-snippets",
+    "bookmarks-collector/analyze-all-captured-snippets",
     {
       url: location.href,
       force
@@ -142,7 +142,7 @@ const analyzeAllSnippets = async (force = false) => {
 }
 
 const openExtensionPage = async (path: string) => {
-  await sendMessage<{ success: boolean }>("smart-favorites/open-extension-page", {
+  await sendMessage<{ success: boolean }>("bookmarks-collector/open-extension-page", {
     path
   })
 }
@@ -360,7 +360,7 @@ window.addEventListener("scroll", () => {
 })
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-  if (message?.type === "smart-favorites/capture-page") {
+  if (message?.type === "bookmarks-collector/capture-page") {
     state.selectionText = getCurrentSelectionText()
     sendResponse({
       page: getPageContext(),
@@ -371,7 +371,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return
   }
 
-  if (message?.type === "smart-favorites/bookmark-created") {
+  if (message?.type === "bookmarks-collector/bookmark-created") {
     state.bookmarkPromptVisible = true
     state.status = "检测到你刚刚收藏了当前页面。"
     renderOverlay()

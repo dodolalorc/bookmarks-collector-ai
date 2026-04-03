@@ -1,10 +1,10 @@
 import type { SmartFavoritesSettings } from "~/src/sdk/types"
 
 export const STORAGE_KEYS = {
-  settings: "smart-favorites/settings",
-  knowledge: "smart-favorites/knowledge",
-  drafts: "smart-favorites/drafts",
-  collections: "smart-favorites/collections"
+  settings: "bookmarks-collector/settings",
+  knowledge: "bookmarks-collector/knowledge",
+  drafts: "bookmarks-collector/drafts",
+  collections: "bookmarks-collector/collections"
 } as const
 
 export const DEFAULT_SYSTEM_PROMPT =

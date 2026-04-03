@@ -26,6 +26,30 @@ const emit = defineEmits<{
 const folderName = computed(
   () => props.folders.find((folder) => folder.id === props.item.folderId)?.name || "未分类内容"
 )
+
+const handleDraftTitleInput = (event: Event) => {
+  const target = event.target
+  emit(
+    "updateDraftTitle",
+    target instanceof HTMLInputElement ? target.value : ""
+  )
+}
+
+const handleDraftTextInput = (event: Event) => {
+  const target = event.target
+  emit(
+    "updateDraftText",
+    target instanceof HTMLTextAreaElement ? target.value : ""
+  )
+}
+
+const handleMoveChange = (event: Event) => {
+  const target = event.target
+  emit("move", {
+    itemId: props.item.id,
+    folderId: target instanceof HTMLSelectElement ? target.value : props.item.folderId
+  })
+}
 </script>
 
 <template>
@@ -58,13 +82,13 @@ const folderName = computed(
           class="field"
           :value="draftTitle"
           placeholder="段落标题"
-          @input="emit('updateDraftTitle', ($event.target as HTMLInputElement).value)" />
+          @input="handleDraftTitleInput" />
         <textarea
           class="field"
           rows="5"
           :value="draftText"
           placeholder="段落内容"
-          @input="emit('updateDraftText', ($event.target as HTMLTextAreaElement).value)" />
+          @input="handleDraftTextInput" />
       </div>
       <div class="inline-actions">
         <button class="primary-button" @click="emit('saveEdit', item.id)">保存</button>
@@ -81,12 +105,7 @@ const folderName = computed(
         <select
           class="select"
           :value="item.folderId"
-          @change="
-            emit('move', {
-              itemId: item.id,
-              folderId: ($event.target as HTMLSelectElement).value
-            })
-          ">
+          @change="handleMoveChange">
           <option v-for="folder in folders" :key="folder.id" :value="folder.id">
             {{ folder.name }}
           </option>

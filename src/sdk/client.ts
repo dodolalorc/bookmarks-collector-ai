@@ -48,13 +48,13 @@ async function getActiveTab() {
 export class SmartFavoritesSDK {
   async getSettings() {
     return sendRuntimeMessage<SmartFavoritesSettings>(
-      "smart-favorites/get-settings"
+      "bookmarks-collector/get-settings"
     )
   }
 
   async saveSettings(settings: SmartFavoritesSettings) {
     return sendRuntimeMessage<{ success: boolean }>(
-      "smart-favorites/save-settings",
+      "bookmarks-collector/save-settings",
       settings
     )
   }
@@ -85,7 +85,7 @@ export class SmartFavoritesSDK {
     }
 
     const response = await chrome.tabs.sendMessage(tab.id, {
-      type: "smart-favorites/capture-page"
+      type: "bookmarks-collector/capture-page"
     })
 
     if (!response?.page) {
@@ -97,94 +97,94 @@ export class SmartFavoritesSDK {
 
   async recommendFolders(input: RecommendationInput) {
     return sendRuntimeMessage<RecommendationResult>(
-      "smart-favorites/recommend",
+      "bookmarks-collector/recommend",
       input
     )
   }
 
   async applyBookmarkRecommendation(payload: ApplyBookmarkPayload) {
     return sendRuntimeMessage<BookmarkMutationResult>(
-      "smart-favorites/apply-bookmark",
+      "bookmarks-collector/apply-bookmark",
       payload
     )
   }
 
   async exportSnapshot() {
-    return sendRuntimeMessage<ExportSnapshot>("smart-favorites/export-snapshot")
+    return sendRuntimeMessage<ExportSnapshot>("bookmarks-collector/export-snapshot")
   }
 
   async listHistoryBookmarks(limit = 40) {
     return sendRuntimeMessage<HistoryRecommendationItem[]>(
-      "smart-favorites/list-history-bookmarks",
+      "bookmarks-collector/list-history-bookmarks",
       { limit }
     )
   }
 
   async applyBulkBookmarkRecommendations(decisions: BookmarkMoveDecision[]) {
     return sendRuntimeMessage<BulkBookmarkApplyResult>(
-      "smart-favorites/apply-bulk-bookmarks",
+      "bookmarks-collector/apply-bulk-bookmarks",
       { decisions }
     )
   }
 
   async openExtensionPage(path: string) {
     return sendRuntimeMessage<{ success: boolean }>(
-      "smart-favorites/open-extension-page",
+      "bookmarks-collector/open-extension-page",
       { path }
     )
   }
 
   async getSnippetCollections() {
     return sendRuntimeMessage<SnippetCollectionState>(
-      "smart-favorites/get-snippet-collections"
+      "bookmarks-collector/get-snippet-collections"
     )
   }
 
   async createSnippetFolder(payload: CreateCollectionFolderPayload) {
     return sendRuntimeMessage<CollectionFolderMutationResult>(
-      "smart-favorites/create-snippet-folder",
+      "bookmarks-collector/create-snippet-folder",
       payload
     )
   }
 
   async updateSnippetFolder(payload: UpdateCollectionFolderPayload) {
     return sendRuntimeMessage<CollectionFolderMutationResult>(
-      "smart-favorites/update-snippet-folder",
+      "bookmarks-collector/update-snippet-folder",
       payload
     )
   }
 
   async deleteSnippetFolder(payload: DeleteCollectionFolderPayload) {
     return sendRuntimeMessage<CollectionFolderMutationResult>(
-      "smart-favorites/delete-snippet-folder",
+      "bookmarks-collector/delete-snippet-folder",
       payload
     )
   }
 
   async updateSnippetCollectionItem(payload: UpdateCollectionItemPayload) {
     return sendRuntimeMessage<CollectionItemMutationResult>(
-      "smart-favorites/update-snippet-item",
+      "bookmarks-collector/update-snippet-item",
       payload
     )
   }
 
   async createSnippetCollectionItem(payload: CreateCollectionItemPayload) {
     return sendRuntimeMessage<CollectionItemMutationResult>(
-      "smart-favorites/create-snippet-item",
+      "bookmarks-collector/create-snippet-item",
       payload
     )
   }
 
   async moveSnippetCollectionItem(payload: MoveCollectionItemPayload) {
     return sendRuntimeMessage<CollectionItemMutationResult>(
-      "smart-favorites/move-snippet-item",
+      "bookmarks-collector/move-snippet-item",
       payload
     )
   }
 
   async deleteSnippetCollectionItem(payload: DeleteCollectionItemPayload) {
     return sendRuntimeMessage<CollectionItemMutationResult>(
-      "smart-favorites/delete-snippet-item",
+      "bookmarks-collector/delete-snippet-item",
       payload
     )
   }

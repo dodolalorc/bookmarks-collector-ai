@@ -61,17 +61,22 @@ const selectedDecisions = computed<BookmarkMoveDecision[]>(() =>
 
 const activeFolder = computed(
   () =>
-    collections.value.folders.find((folder) => folder.id === activeFolderId.value) ??
+    collections.value.folders.find(
+      (folder) => folder.id === activeFolderId.value
+    ) ??
     collections.value.folders[0] ??
     null
 )
 
 const activeFolderItems = computed(() =>
-  collections.value.items.filter((item) => item.folderId === activeFolderId.value)
+  collections.value.items.filter(
+    (item) => item.folderId === activeFolderId.value
+  )
 )
 
 const hasAnyManagedContent = computed(
-  () => collections.value.folders.length > 1 || collections.value.items.length > 0
+  () =>
+    collections.value.folders.length > 1 || collections.value.items.length > 0
 )
 
 onMounted(() => {
@@ -97,7 +102,11 @@ const loadSettings = async () => {
 
 const loadCollections = async () => {
   collections.value = await sdk.getSnippetCollections()
-  if (!collections.value.folders.some((folder) => folder.id === activeFolderId.value)) {
+  if (
+    !collections.value.folders.some(
+      (folder) => folder.id === activeFolderId.value
+    )
+  ) {
     activeFolderId.value = collections.value.folders[0]?.id ?? "uncategorized"
   }
   collectionsStatus.value =
@@ -122,7 +131,7 @@ const downloadJson = (snapshot: ExportSnapshot) => {
   const url = URL.createObjectURL(blob)
   const anchor = document.createElement("a")
   anchor.href = url
-  anchor.download = `smart-favorites-backup-${Date.now()}.json`
+  anchor.download = `bookmarks-collector-backup-${Date.now()}.json`
   anchor.click()
   URL.revokeObjectURL(url)
 }
@@ -633,7 +642,8 @@ const handleCollectionCardStartEdit = (itemId: string) => {
               @input="handleFolderDescriptionInput" />
             <div class="button-row">
               <BaseButton variant="primary" @click="saveFolder">
-                <font-awesome-icon :icon="editingFolderId ? 'floppy-disk' : 'folder-plus'" />
+                <font-awesome-icon
+                  :icon="editingFolderId ? 'floppy-disk' : 'folder-plus'" />
                 {{ editingFolderId ? "保存收藏夹" : "新建空收藏夹" }}
               </BaseButton>
               <BaseButton v-if="editingFolderId" @click="resetFolderForm">
@@ -685,7 +695,9 @@ const handleCollectionCardStartEdit = (itemId: string) => {
             <div>
               <SectionHeader
                 compact
-                :title="activeFolder ? `内容列表 · ${activeFolder.name}` : '内容列表'" />
+                :title="
+                  activeFolder ? `内容列表 · ${activeFolder.name}` : '内容列表'
+                " />
               <div class="status">
                 支持增删查改收藏夹中的内容，并查看每段内容的原始文本。
               </div>
@@ -900,7 +912,11 @@ const handleCollectionCardStartEdit = (itemId: string) => {
 .folder-item.active {
   border-color: rgba(104, 147, 255, 0.5);
   box-shadow: 0 12px 24px rgba(97, 129, 184, 0.12);
-  background: linear-gradient(135deg, rgba(255, 236, 247, 0.92), rgba(236, 248, 255, 0.98));
+  background: linear-gradient(
+    135deg,
+    rgba(255, 236, 247, 0.92),
+    rgba(236, 248, 255, 0.98)
+  );
 }
 
 .folder-item-top {
@@ -960,10 +976,21 @@ const handleCollectionCardStartEdit = (itemId: string) => {
 
 .empty-hero {
   text-align: left;
-  background:
-    radial-gradient(circle at top right, rgba(255, 215, 239, 0.45), transparent 36%),
-    radial-gradient(circle at bottom left, rgba(184, 233, 255, 0.45), transparent 38%),
-    linear-gradient(135deg, rgba(255, 255, 255, 0.97), rgba(245, 249, 255, 0.98));
+  background: radial-gradient(
+      circle at top right,
+      rgba(255, 215, 239, 0.45),
+      transparent 36%
+    ),
+    radial-gradient(
+      circle at bottom left,
+      rgba(184, 233, 255, 0.45),
+      transparent 38%
+    ),
+    linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.97),
+      rgba(245, 249, 255, 0.98)
+    );
 }
 
 .empty-kicker {

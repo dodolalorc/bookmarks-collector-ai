@@ -1,6 +1,6 @@
-export const ROOT_ID = "smart-favorites-overlay-root"
-export const HIGHLIGHT_ID = "smart-favorites-highlight-box"
-const CAPTURE_STYLE_ID = "smart-favorites-capture-style"
+export const ROOT_ID = "bookmarks-collector-overlay-root"
+export const HIGHLIGHT_ID = "bookmarks-collector-highlight-box"
+const CAPTURE_STYLE_ID = "bookmarks-collector-capture-style"
 
 export const ensureCaptureStyles = () => {
     if (document.getElementById(CAPTURE_STYLE_ID)) {
