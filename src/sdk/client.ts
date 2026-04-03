@@ -15,12 +15,15 @@ import type {
   ExportSnapshot,
   HistoryRecommendationItem,
   MoveCollectionItemPayload,
+  PageDigestRequest,
+  PageDigestResult,
   RecommendationInput,
   RecommendationResult,
   SnippetCollectionState,
   SmartFavoritesSettings,
   UpdateCollectionFolderPayload,
-  UpdateCollectionItemPayload
+  UpdateCollectionItemPayload,
+  UpdateActiveProviderPayload
 } from "~/src/sdk/types"
 
 async function sendRuntimeMessage<T>(type: string, payload?: unknown): Promise<T> {
@@ -56,6 +59,13 @@ export class SmartFavoritesSDK {
     return sendRuntimeMessage<{ success: boolean }>(
       "bookmarks-collector/save-settings",
       settings
+    )
+  }
+
+  async summarizePageContent(payload: PageDigestRequest) {
+    return sendRuntimeMessage<PageDigestResult>(
+      "bookmarks-collector/summarize-page-content",
+      payload
     )
   }
 
@@ -131,6 +141,13 @@ export class SmartFavoritesSDK {
     return sendRuntimeMessage<{ success: boolean }>(
       "bookmarks-collector/open-extension-page",
       { path }
+    )
+  }
+
+  async updateActiveProvider(payload: UpdateActiveProviderPayload) {
+    return sendRuntimeMessage<SmartFavoritesSettings>(
+      "bookmarks-collector/update-active-provider",
+      payload
     )
   }
 

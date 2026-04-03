@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue"
 
-import type { CapturedSnippet } from "../sdk/types"
+import type { AiModelProfile, CapturedSnippet } from "../sdk/types"
 import OverlaySnippetCard from "./OverlaySnippetCard.vue"
 
 type OverlayStateView = {
@@ -9,10 +9,24 @@ type OverlayStateView = {
     snippets: CapturedSnippet[]
   }
   sidebarOpen: boolean
+  aiPanelOpen: boolean
   elementPickMode: boolean
   status: string
+  aiStatus: string
   bookmarkPromptVisible: boolean
   selectionText: string
+  articleTitle: string
+  articleUrl: string
+  articleAuthor: string
+  articleDate: string
+  articleContent: string
+  aiPrompt: string
+  aiModelId: string
+  aiModelLabel: string
+  aiTokenEstimate: number
+  aiCharCount: number
+  aiRunning: boolean
+  aiModels: AiModelProfile[]
   selectionAnchorVisible: boolean
   selectionAnchorHovered: boolean
   selectionAnchor: {
@@ -28,6 +42,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   toggleSidebar: []
+  toggleAiPanel: []
   captureSelection: []
   toggleElementMode: []
   deleteSnippet: [snippetId: string]
@@ -36,19 +51,48 @@ const emit = defineEmits<{
   reanalyzeAllSnippets: []
   openOptions: []
   openHistory: []
+  openGithub: []
+  refreshArticle: []
+  updateArticleMeta: [
+    payload: {
+      title?: string
+      url?: string
+      author?: string
+      date?: string
+      content?: string
+      prompt?: string
+      modelId?: string
+    }
+  ]
+  summarizeArticle: []
   classifyNow: []
   dismissBookmarkPrompt: []
   showSelectionPrompt: []
   hideSelectionPrompt: []
 }>()
 
+const AI_PANEL_WIDTH = 560
+
 const sidebarTransform = computed(() =>
   props.state.sidebarOpen ? "translateX(0)" : "translateX(100%)"
 )
 
-const floatingButtonRight = computed(() =>
-  props.state.sidebarOpen ? `${props.sidebarWidth + 24}px` : "20px"
+const aiPanelTransform = computed(() =>
+  props.state.aiPanelOpen ? "translateX(0)" : "translateX(100%)"
 )
+
+const aiPanelRight = computed(() =>
+  props.state.sidebarOpen ? `${props.sidebarWidth}px` : "0px"
+)
+
+const sidebarOffset = computed(() =>
+  props.state.sidebarOpen ? props.sidebarWidth + 24 : 20
+)
+
+const aiOffset = computed(() => {
+  const base = props.state.aiPanelOpen ? AI_PANEL_WIDTH + 24 : 20
+  return base + (props.state.sidebarOpen ? props.sidebarWidth + 12 : 0)
+})
 
 const promptRight = computed(() =>
   props.state.sidebarOpen ? `${props.sidebarWidth + 72}px` : "72px"
@@ -63,6 +107,39 @@ const selectionDotStyle = computed(() => ({
   top: `${props.state.selectionAnchor.top}px`,
   left: `${props.state.selectionAnchor.left}px`
 }))
+
+const aiMetaSummary = computed(() => [
+  { label: "字符", value: props.state.aiCharCount.toLocaleString() },
+  { label: "预算 Token", value: props.state.aiTokenEstimate.toLocaleString() },
+  { label: "模型", value: props.state.aiModelLabel || "未配置模型" }
+])
+
+const onTextInput =
+  (key: "title" | "url" | "author" | "date" | "content" | "prompt") =>
+  (event: Event) => {
+    const target = event.target
+    if (
+      !(target instanceof HTMLInputElement) &&
+      !(target instanceof HTMLTextAreaElement)
+    ) {
+      return
+    }
+
+    emit("updateArticleMeta", {
+      [key]: target.value
+    })
+  }
+
+const onModelChange = (event: Event) => {
+  const target = event.target
+  if (!(target instanceof HTMLSelectElement)) {
+    return
+  }
+
+  emit("updateArticleMeta", {
+    modelId: target.value
+  })
+}
 </script>
 
 <template>
@@ -111,10 +188,18 @@ const selectionDotStyle = computed(() => ({
 
     <button
       class="floating-ball"
-      :style="{ right: floatingButtonRight }"
+      :style="{ right: `${sidebarOffset}px` }"
       title="切换页面知识侧边栏"
       @click="emit('toggleSidebar')">
       <font-awesome-icon icon="wand-magic-sparkles" />
+    </button>
+
+    <button
+      class="floating-ball floating-ball-ai"
+      :style="{ right: `${aiOffset}px` }"
+      title="打开页面 AI 整理面板"
+      @click="emit('toggleAiPanel')">
+      <font-awesome-icon icon="brain" />
     </button>
 
     <aside
@@ -128,8 +213,8 @@ const selectionDotStyle = computed(() => ({
             统一收集当前书签页下的小知识点，不做分类拆分。
           </div>
         </div>
-        <button class="chip" @click="emit('toggleSidebar')">
-          <font-awesome-icon icon="chevron-right" />
+        <button class="icon-button" @click="emit('toggleSidebar')">
+          <font-awesome-icon icon="xmark" />
         </button>
       </div>
       <div class="sidebar-status">{{ state.status }}</div>
@@ -175,14 +260,125 @@ const selectionDotStyle = computed(() => ({
       <div class="sidebar-footer">
         <div class="footer-text">模型配置和书签整理保留在管理页中</div>
         <div class="footer-actions">
-          <button class="chip" @click="emit('openOptions')">
+          <button class="icon-button" title="模型配置" @click="emit('openOptions')">
             <font-awesome-icon icon="gear" />
-            模型
           </button>
-          <button class="chip" @click="emit('openHistory')">
+          <button class="icon-button" title="书签整理" @click="emit('openHistory')">
             <font-awesome-icon icon="bookmark" />
-            书签
           </button>
+          <button class="icon-button" title="GitHub" @click="emit('openGithub')">
+            <font-awesome-icon icon="up-right-from-square" />
+          </button>
+        </div>
+      </div>
+    </aside>
+
+    <aside
+      class="ai-panel"
+      :style="{
+        width: `${AI_PANEL_WIDTH}px`,
+        transform: aiPanelTransform,
+        right: aiPanelRight
+      }">
+      <div class="ai-panel-head">
+        <div>
+          <div class="sidebar-eyebrow">Page Digest</div>
+          <div class="sidebar-title">AI 页面整理</div>
+          <div class="sidebar-subtitle">
+            把当前网页当作博客文章处理，抽取成可继续编辑和投喂模型的结构化文本。
+          </div>
+        </div>
+        <div class="panel-actions">
+          <button class="icon-button" title="刷新页面抓取" @click="emit('refreshArticle')">
+            <font-awesome-icon icon="rotate-right" />
+          </button>
+          <button class="icon-button" title="模型配置" @click="emit('openOptions')">
+            <font-awesome-icon icon="gear" />
+          </button>
+          <button class="icon-button" title="关闭面板" @click="emit('toggleAiPanel')">
+            <font-awesome-icon icon="xmark" />
+          </button>
+        </div>
+      </div>
+
+      <div class="ai-panel-body">
+        <div class="sidebar-status">{{ state.aiStatus }}</div>
+
+        <div class="meta-grid">
+          <label class="field-wrap">
+            <span class="field-label">标题</span>
+            <input class="field" :value="state.articleTitle" @input="onTextInput('title')" />
+          </label>
+          <label class="field-wrap">
+            <span class="field-label">作者</span>
+            <input class="field" :value="state.articleAuthor" @input="onTextInput('author')" />
+          </label>
+          <label class="field-wrap">
+            <span class="field-label">日期</span>
+            <input class="field" :value="state.articleDate" @input="onTextInput('date')" />
+          </label>
+          <label class="field-wrap field-wrap-wide">
+            <span class="field-label">网址</span>
+            <input class="field" :value="state.articleUrl" @input="onTextInput('url')" />
+          </label>
+        </div>
+
+        <div class="field-wrap">
+          <div class="field-row">
+            <span class="field-label">文章主要内容</span>
+            <div class="field-stats">
+              <span
+                v-for="item in aiMetaSummary"
+                :key="item.label"
+                class="stat-pill">
+                {{ item.label }} {{ item.value }}
+              </span>
+            </div>
+          </div>
+          <textarea
+            class="field textarea-large"
+            :value="state.articleContent"
+            @input="onTextInput('content')" />
+        </div>
+
+        <div class="field-wrap">
+          <span class="field-label">AI 提示词</span>
+          <textarea
+            class="field textarea-prompt"
+            :value="state.aiPrompt"
+            placeholder="补充你想让 AI 用什么视角来整理，例如：保留关键论点并输出成技术笔记。"
+            @input="onTextInput('prompt')" />
+        </div>
+
+        <div class="field-row action-row">
+          <label class="field-wrap model-select-wrap">
+            <span class="field-label">模型选择</span>
+            <div class="select-shell">
+              <select class="field select-field" :value="state.aiModelId" @change="onModelChange">
+                <option
+                  v-for="model in state.aiModels"
+                  :key="model.id"
+                  :value="model.id">
+                  {{ model.label }}{{ model.model ? ` · ${model.model}` : "" }}
+                </option>
+              </select>
+              <font-awesome-icon icon="chevron-down" class="select-arrow" />
+            </div>
+          </label>
+
+          <div class="bar-actions">
+            <button class="chip" @click="emit('openOptions')">
+              <font-awesome-icon icon="gear" />
+              模型配置
+            </button>
+            <button
+              class="chip chip-gradient"
+              :disabled="state.aiRunning"
+              @click="emit('summarizeArticle')">
+              <font-awesome-icon icon="robot" />
+              {{ state.aiRunning ? "整理中…" : "一键总结" }}
+            </button>
+          </div>
         </div>
       </div>
     </aside>
@@ -205,7 +401,10 @@ const selectionDotStyle = computed(() => ({
   box-sizing: border-box;
 }
 
-.overlay-root button {
+.overlay-root button,
+.overlay-root input,
+.overlay-root textarea,
+.overlay-root select {
   font: inherit;
 }
 
@@ -236,43 +435,37 @@ const selectionDotStyle = computed(() => ({
 }
 
 .prompt-actions,
-.footer-actions {
+.footer-actions,
+.panel-actions,
+.bar-actions {
   display: flex;
   gap: var(--sf-space-2);
+  align-items: center;
 }
 
 .floating-ball {
-  --ball-size: 32px;
+  --ball-size: 34px;
   position: fixed;
   top: 84px;
   pointer-events: auto;
   width: var(--ball-size);
-  min-width: var(--ball-size);
-  max-width: var(--ball-size);
   height: var(--ball-size);
-  min-height: var(--ball-size);
-  max-height: var(--ball-size);
-  aspect-ratio: 1 / 1;
-  padding: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  appearance: none;
-  -webkit-appearance: none;
-  line-height: 1;
+  padding: 0;
   border-radius: 50%;
   border: 2px solid rgba(255, 255, 255, 0.96);
   outline: 1px solid rgba(74, 107, 164, 0.52);
-  background: radial-gradient(
-    circle at 30% 30%,
-    #ffe1f5 0%,
-    #b9ecff 42%,
-    #6c95ff 100%
-  );
+  background: radial-gradient(circle at 30% 30%, #ffe1f5 0%, #b9ecff 42%, #6c95ff 100%);
   box-shadow:
     0 10px 24px rgba(57, 93, 156, 0.4),
     0 0 0 3px rgba(168, 216, 255, 0.22);
   cursor: pointer;
+}
+
+.floating-ball-ai {
+  background: radial-gradient(circle at 30% 30%, #fff0c7 0%, #ffd27f 34%, #ff8c42 100%);
 }
 
 .selection-anchor-wrap {
@@ -328,7 +521,8 @@ const selectionDotStyle = computed(() => ({
   color: #6d7994;
 }
 
-.sidebar {
+.sidebar,
+.ai-panel {
   position: fixed;
   right: 0;
   top: 0;
@@ -337,7 +531,6 @@ const selectionDotStyle = computed(() => ({
   transition: transform 220ms ease;
   display: flex;
   flex-direction: column;
-  border-radius: 0;
   overflow: hidden;
   background: linear-gradient(
     180deg,
@@ -350,7 +543,18 @@ const selectionDotStyle = computed(() => ({
   backdrop-filter: blur(18px);
 }
 
-.sidebar-head {
+.ai-panel {
+  right: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 251, 240, 0.99) 0%,
+    rgba(255, 246, 231, 0.99) 36%,
+    rgba(247, 251, 255, 0.99) 100%
+  );
+}
+
+.sidebar-head,
+.ai-panel-head {
   padding: var(--sf-space-4) var(--sf-space-4) var(--sf-space-3);
   border-bottom: 1px solid rgba(136, 176, 224, 0.14);
   background: linear-gradient(
@@ -362,6 +566,15 @@ const selectionDotStyle = computed(() => ({
   display: flex;
   justify-content: space-between;
   gap: var(--sf-space-3);
+}
+
+.ai-panel-head {
+  background: linear-gradient(
+    135deg,
+    rgba(255, 233, 176, 0.76) 0%,
+    rgba(255, 246, 228, 0.82) 52%,
+    rgba(241, 248, 255, 0.82) 100%
+  );
 }
 
 .sidebar-eyebrow {
@@ -416,9 +629,28 @@ const selectionDotStyle = computed(() => ({
   gap: var(--sf-space-1);
 }
 
+.chip:disabled,
+.icon-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .chip-gradient {
   background: linear-gradient(135deg, #ff8ed8 0%, #8ad8ff 100%);
   color: #21304f;
+}
+
+.icon-button {
+  border: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  color: #516890;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
 }
 
 .selection-panel {
@@ -429,22 +661,24 @@ const selectionDotStyle = computed(() => ({
   border: 1px solid rgba(150, 195, 235, 0.18);
 }
 
-.selection-label {
+.selection-label,
+.field-label {
   font-size: var(--sf-font-size-xs);
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: #7c86ad;
-  margin-bottom: var(--sf-space-1);
 }
 
 .selection-text {
+  margin-top: var(--sf-space-1);
   font-size: var(--sf-font-size-sm);
   line-height: 1.65;
   color: #31415f;
 }
 
-.snippet-list {
+.snippet-list,
+.ai-panel-body {
   padding: var(--sf-space-3) var(--sf-space-4) var(--sf-space-4);
   overflow: auto;
   display: flex;
@@ -475,5 +709,101 @@ const selectionDotStyle = computed(() => ({
 .footer-text {
   font-size: var(--sf-font-size-xs);
   color: #8591ac;
+}
+
+.meta-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sf-space-3);
+}
+
+.field-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-1);
+}
+
+.field-wrap-wide {
+  grid-column: 1 / -1;
+}
+
+.field-row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--sf-space-2);
+  align-items: center;
+}
+
+.field-stats {
+  display: flex;
+  gap: var(--sf-space-2);
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.stat-pill {
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.74);
+  color: #586781;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.field,
+.select-field {
+  width: 100%;
+  min-height: 40px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(147, 168, 197, 0.44);
+  background: rgba(255, 255, 255, 0.82);
+  color: #20304c;
+}
+
+.textarea-large {
+  min-height: 280px;
+  resize: vertical;
+  line-height: 1.7;
+}
+
+.textarea-prompt {
+  min-height: 92px;
+  resize: vertical;
+  line-height: 1.6;
+}
+
+.action-row {
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.model-select-wrap {
+  min-width: 240px;
+  flex: 1;
+}
+
+.select-shell {
+  position: relative;
+}
+
+.select-field {
+  appearance: none;
+  padding-right: 34px;
+}
+
+.select-arrow {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #7686a1;
+  pointer-events: none;
+}
+
+@media (max-width: 860px) {
+  .meta-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

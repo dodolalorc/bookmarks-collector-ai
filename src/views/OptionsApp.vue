@@ -4,9 +4,11 @@ import { computed, onMounted, ref } from "vue"
 import { SmartFavoritesSDK } from "../sdk/client"
 import {
   DEFAULT_PROMPT_TEMPLATE,
-  DEFAULT_SYSTEM_PROMPT
+  DEFAULT_SYSTEM_PROMPT,
+  GITHUB_REPO_URL
 } from "../sdk/constants"
 import type {
+  AiModelProfile,
   BookmarkMoveDecision,
   ExportSnapshot,
   HistoryRecommendationItem,
@@ -79,6 +81,20 @@ const hasAnyManagedContent = computed(
     collections.value.folders.length > 1 || collections.value.items.length > 0
 )
 
+const activeProvider = computed(() => {
+  if (!settings.value) {
+    return null
+  }
+
+  return (
+    settings.value.providers.find(
+      (provider) => provider.id === settings.value?.activeProviderId
+    ) ??
+    settings.value.providers[0] ??
+    null
+  )
+})
+
 onMounted(() => {
   void loadSettings()
   void refreshHistory()
@@ -95,8 +111,26 @@ const updateSettings = (next: SmartFavoritesSettings) => {
   settings.value = next
 }
 
+const syncActiveProviderView = (next: SmartFavoritesSettings): SmartFavoritesSettings => {
+  const activeProvider =
+    next.providers.find((provider) => provider.id === next.activeProviderId) ??
+    next.providers[0]
+
+  return {
+    ...next,
+    provider: activeProvider
+      ? {
+          baseUrl: activeProvider.baseUrl,
+          apiKey: activeProvider.apiKey,
+          model: activeProvider.model
+        }
+      : next.provider
+  }
+}
+
 const loadSettings = async () => {
-  settings.value = await sdk.getSettings()
+  const loaded = await sdk.getSettings()
+  settings.value = syncActiveProviderView(loaded)
   status.value = "已读取当前配置。"
 }
 
@@ -120,7 +154,9 @@ const saveSettings = async () => {
     return
   }
 
-  await sdk.saveSettings(settings.value)
+  const normalized = syncActiveProviderView(settings.value)
+  await sdk.saveSettings(normalized)
+  settings.value = normalized
   status.value = "配置已保存。"
 }
 
@@ -192,46 +228,80 @@ const readCheckedValue = (event: Event) => {
   return target instanceof HTMLInputElement ? target.checked : false
 }
 
-const onBaseUrlInput = (event: Event) => {
+const updateProvider = (
+  providerId: string,
+  updates: Partial<AiModelProfile>
+) => {
   if (!settings.value) {
     return
   }
 
-  updateSettings({
+  const next = syncActiveProviderView({
     ...settings.value,
-    provider: {
-      ...settings.value.provider,
-      baseUrl: readInputValue(event)
-    }
+    providers: settings.value.providers.map((provider) =>
+      provider.id === providerId ? { ...provider, ...updates } : provider
+    )
   })
+
+  updateSettings(next)
 }
 
-const onModelInput = (event: Event) => {
+const switchProvider = (providerId: string) => {
   if (!settings.value) {
     return
   }
 
-  updateSettings({
-    ...settings.value,
-    provider: {
-      ...settings.value.provider,
-      model: readInputValue(event)
-    }
-  })
+  updateSettings(
+    syncActiveProviderView({
+      ...settings.value,
+      activeProviderId: providerId
+    })
+  )
 }
 
-const onApiKeyInput = (event: Event) => {
+const addProvider = () => {
   if (!settings.value) {
     return
   }
 
-  updateSettings({
-    ...settings.value,
-    provider: {
-      ...settings.value.provider,
-      apiKey: readInputValue(event)
-    }
-  })
+  const nextProvider: AiModelProfile = {
+    id: `provider-${Date.now()}`,
+    label: `模型 ${settings.value.providers.length + 1}`,
+    baseUrl: "https://api.openai.com/v1",
+    apiKey: "",
+    model: ""
+  }
+
+  updateSettings(
+    syncActiveProviderView({
+      ...settings.value,
+      providers: [...settings.value.providers, nextProvider],
+      activeProviderId: nextProvider.id
+    })
+  )
+}
+
+const removeProvider = (providerId: string) => {
+  if (!settings.value || settings.value.providers.length <= 1) {
+    status.value = "至少保留一个模型配置。"
+    return
+  }
+
+  const providers = settings.value.providers.filter(
+    (provider) => provider.id !== providerId
+  )
+  const activeProviderId =
+    settings.value.activeProviderId === providerId
+      ? providers[0].id
+      : settings.value.activeProviderId
+
+  updateSettings(
+    syncActiveProviderView({
+      ...settings.value,
+      providers,
+      activeProviderId
+    })
+  )
 }
 
 const onSystemPromptInput = (event: Event) => {
@@ -302,6 +372,10 @@ const onStoreKnowledgeChange = (event: Event) => {
       storeKnowledge: readCheckedValue(event)
     }
   })
+}
+
+const openGithub = () => {
+  window.open(GITHUB_REPO_URL, "_blank", "noopener,noreferrer")
 }
 
 const resetFolderForm = () => {
@@ -473,6 +547,10 @@ const handleCollectionCardStartEdit = (itemId: string) => {
           <font-awesome-icon icon="bookmark" />
           历史整理
         </BaseButton>
+        <BaseButton @click="openGithub">
+          <font-awesome-icon icon="up-right-from-square" />
+          GitHub
+        </BaseButton>
       </div>
     </BaseCard>
 
@@ -482,28 +560,89 @@ const handleCollectionCardStartEdit = (itemId: string) => {
 
     <template v-else-if="tab === 'settings'">
       <BaseCard>
-        <SectionHeader compact title="AI Provider" />
+        <div class="row wrap">
+          <SectionHeader
+            compact
+            title="AI Models"
+            subtitle="支持配置多个 OpenAI 兼容模型，并同步给网页 AI 面板使用。" />
+          <BaseButton variant="accent" @click="addProvider">
+            <font-awesome-icon icon="plus" />
+            添加模型
+          </BaseButton>
+        </div>
+
+        <div class="provider-grid">
+          <button
+            v-for="provider in settings.providers"
+            :key="provider.id"
+            class="provider-card"
+            :class="{ active: settings.activeProviderId === provider.id }"
+            @click="switchProvider(provider.id)">
+            <div class="provider-card-top">
+              <div>
+                <div class="provider-name">{{ provider.label }}</div>
+                <div class="provider-model">
+                  {{ provider.model || "未填写模型名" }}
+                </div>
+              </div>
+              <div class="provider-tools">
+                <span
+                  v-if="settings.activeProviderId === provider.id"
+                  class="provider-badge">
+                  当前
+                </span>
+                <button
+                  v-if="settings.providers.length > 1"
+                  class="mini-icon danger"
+                  type="button"
+                  title="删除模型"
+                  @click.stop="removeProvider(provider.id)">
+                  <font-awesome-icon icon="trash" />
+                </button>
+              </div>
+            </div>
+            <div class="provider-url">{{ provider.baseUrl }}</div>
+          </button>
+        </div>
+      </BaseCard>
+
+      <BaseCard v-if="activeProvider">
+        <SectionHeader compact title="当前模型编辑" />
+        <FormField label="展示名称">
+          <input
+            class="field"
+            :value="activeProvider.label"
+            @input="
+              updateProvider(activeProvider.id, { label: readInputValue($event) })
+            " />
+        </FormField>
         <FormField label="接口基地址">
           <input
             class="field"
-            :value="settings.provider.baseUrl"
-            @input="onBaseUrlInput" />
+            :value="activeProvider.baseUrl"
+            @input="
+              updateProvider(activeProvider.id, { baseUrl: readInputValue($event) })
+            " />
         </FormField>
         <FormField label="模型名称">
           <input
             class="field"
-            :value="settings.provider.model"
-            @input="onModelInput" />
+            :value="activeProvider.model"
+            @input="
+              updateProvider(activeProvider.id, { model: readInputValue($event) })
+            " />
         </FormField>
         <FormField label="API Key">
           <div class="secret-field">
             <input
               class="field secret-input"
               :type="showApiKey ? 'text' : 'password'"
-              :value="settings.provider.apiKey"
-              @input="onApiKeyInput" />
+              :value="activeProvider.apiKey"
+              @input="
+                updateProvider(activeProvider.id, { apiKey: readInputValue($event) })
+              " />
             <button
-              v-if="settings.provider.apiKey"
+              v-if="activeProvider.apiKey"
               class="eye-button"
               type="button"
               :title="showApiKey ? '隐藏 Key' : '查看 Key'"
@@ -547,28 +686,27 @@ const handleCollectionCardStartEdit = (itemId: string) => {
 
       <BaseCard>
         <SectionHeader compact title="策略开关" />
-        <label class="check-item"
-          ><input
+        <label class="check-item">
+          <input
             type="checkbox"
             :checked="settings.behavior.allowCreateFolder"
-            @change="onAllowCreateFolderChange" />允许推荐创建新文件夹</label
-        >
-        <label class="check-item"
-          ><input
+            @change="onAllowCreateFolderChange" />
+          允许推荐创建新文件夹
+        </label>
+        <label class="check-item">
+          <input
             type="checkbox"
             :checked="settings.behavior.preferExistingFolder"
-            @change="
-              onPreferExistingFolderChange
-            " />优先推荐已有结构，降低新建文件夹频率</label
-        >
-        <label class="check-item"
-          ><input
+            @change="onPreferExistingFolderChange" />
+          优先推荐已有结构，降低新建文件夹频率
+        </label>
+        <label class="check-item">
+          <input
             type="checkbox"
             :checked="settings.behavior.storeKnowledge"
-            @change="
-              onStoreKnowledgeChange
-            " />保存页面摘要、标签和推荐结果到本地知识库</label
-        >
+            @change="onStoreKnowledgeChange" />
+          保存页面摘要、标签和推荐结果到本地知识库
+        </label>
       </BaseCard>
 
       <BaseCard class="actions">
@@ -577,6 +715,10 @@ const handleCollectionCardStartEdit = (itemId: string) => {
           <BaseButton @click="exportBackup">
             <font-awesome-icon icon="file-export" />
             导出备份
+          </BaseButton>
+          <BaseButton @click="openGithub">
+            <font-awesome-icon icon="up-right-from-square" />
+            GitHub
           </BaseButton>
           <BaseButton variant="primary" @click="saveSettings">
             <font-awesome-icon icon="floppy-disk" />
@@ -593,6 +735,10 @@ const handleCollectionCardStartEdit = (itemId: string) => {
           <div class="status">{{ collectionsStatus }}</div>
         </div>
         <div class="button-row">
+          <BaseButton @click="openGithub">
+            <font-awesome-icon icon="up-right-from-square" />
+            GitHub
+          </BaseButton>
           <BaseButton @click="loadCollections">
             <font-awesome-icon icon="arrows-rotate" />
             刷新收藏夹
@@ -805,7 +951,8 @@ const handleCollectionCardStartEdit = (itemId: string) => {
 }
 
 .tab-actions,
-.button-row {
+.button-row,
+.provider-tools {
   display: flex;
   gap: var(--sf-space-3);
   flex-wrap: wrap;
@@ -835,6 +982,78 @@ const handleCollectionCardStartEdit = (itemId: string) => {
   font-size: var(--sf-font-size-md);
   background: var(--sf-color-surface);
   resize: vertical;
+}
+
+.provider-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: var(--sf-space-3);
+}
+
+.provider-card {
+  width: 100%;
+  border: 1px solid rgba(123, 153, 205, 0.18);
+  border-radius: 18px;
+  padding: 16px;
+  background: linear-gradient(180deg, #fff, #f9fbff);
+  text-align: left;
+  cursor: pointer;
+}
+
+.provider-card.active {
+  border-color: rgba(104, 147, 255, 0.42);
+  box-shadow: 0 12px 24px rgba(97, 129, 184, 0.12);
+  background: linear-gradient(135deg, rgba(255, 236, 247, 0.92), rgba(236, 248, 255, 0.98));
+}
+
+.provider-card-top {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--sf-space-3);
+  align-items: flex-start;
+}
+
+.provider-name {
+  font-size: 15px;
+  font-weight: 800;
+  color: #23324d;
+}
+
+.provider-model,
+.provider-url {
+  margin-top: 4px;
+  color: #6f809d;
+  font-size: 12px;
+  line-height: 1.6;
+  word-break: break-all;
+}
+
+.provider-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: #edf4ff;
+  color: #5570a1;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.mini-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: 0;
+  background: #f0f4fb;
+  color: #5a6e97;
+  cursor: pointer;
+}
+
+.mini-icon.danger {
+  background: #ffe9ed;
+  color: #ca3654;
 }
 
 .secret-field {

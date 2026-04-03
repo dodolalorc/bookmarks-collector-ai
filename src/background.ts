@@ -8,7 +8,9 @@ import {
 import { recommendFolders } from "~/src/sdk/folder-recommender"
 import {
   analyzeSnippetContent,
-  extractAiRecommendations
+  extractAiRecommendations,
+  hasProviderConfig,
+  summarizePageContent
 } from "~/src/sdk/provider"
 import {
   addSnippetCollectionItem,
@@ -45,10 +47,12 @@ import type {
   HistoryRecommendationItem,
   HistoryRecommendationRequest,
   MoveCollectionItemPayload,
+  PageDigestRequest,
   PageCaptureDraft,
   RecommendationInput,
   RecommendationResult,
   SmartFavoritesSettings,
+  UpdateActiveProviderPayload,
   UpdateCollectionFolderPayload,
   UpdateCollectionItemPayload
 } from "~/src/sdk/types"
@@ -80,8 +84,12 @@ async function handleMessage(message: { type: string; payload?: unknown }) {
     case "bookmarks-collector/save-settings":
       await saveSettings(message.payload as SmartFavoritesSettings)
       return { success: true }
+    case "bookmarks-collector/update-active-provider":
+      return handleUpdateActiveProvider(message.payload as UpdateActiveProviderPayload)
     case "bookmarks-collector/recommend":
       return handleRecommendation(message.payload as RecommendationInput)
+    case "bookmarks-collector/summarize-page-content":
+      return handleSummarizePageContent(message.payload as PageDigestRequest)
     case "bookmarks-collector/apply-bookmark":
       return handleApplyBookmark(message.payload as ApplyBookmarkPayload)
     case "bookmarks-collector/export-snapshot":
@@ -157,12 +165,11 @@ async function handleRecommendation(
   ])
 
   const baseRecommendation = recommendFolders(input, folderIndex, settings)
+  const activeProvider =
+    settings.providers.find((provider) => provider.id === settings.activeProviderId) ??
+    settings.providers[0]
 
-  if (
-    !settings.provider.apiKey ||
-    !settings.provider.baseUrl ||
-    !settings.provider.model
-  ) {
+  if (!activeProvider || !hasProviderConfig(activeProvider)) {
     return baseRecommendation
   }
 
@@ -185,6 +192,35 @@ async function handleRecommendation(
   }
 
   return baseRecommendation
+}
+
+async function handleUpdateActiveProvider(payload: UpdateActiveProviderPayload) {
+  const settings = await getSettings()
+  const activeProvider =
+    settings.providers.find((provider) => provider.id === payload.providerId) ??
+    settings.providers[0]
+
+  if (!activeProvider) {
+    return settings
+  }
+
+  const nextSettings: SmartFavoritesSettings = {
+    ...settings,
+    activeProviderId: activeProvider.id,
+    provider: {
+      baseUrl: activeProvider.baseUrl,
+      apiKey: activeProvider.apiKey,
+      model: activeProvider.model
+    }
+  }
+
+  await saveSettings(nextSettings)
+  return nextSettings
+}
+
+async function handleSummarizePageContent(payload: PageDigestRequest) {
+  const settings = await getSettings()
+  return summarizePageContent(payload, settings)
 }
 
 async function handleApplyBookmark(payload: ApplyBookmarkPayload) {

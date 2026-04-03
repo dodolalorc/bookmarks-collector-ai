@@ -105,3 +105,7 @@ export interface CollectionItemMutationResult {
     collections: SnippetCollectionState
     itemId: string
 }
+
+export interface UpdateActiveProviderPayload {
+  providerId: string
+}

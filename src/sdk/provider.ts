@@ -1,8 +1,12 @@
 import { generateText } from "@xsai/generate-text"
 
 import type {
+  AiModelProfile,
   FolderIndex,
   FolderSuggestion,
+  PageContext,
+  PageDigestRequest,
+  PageDigestResult,
   RecommendationInput,
   RecommendationResult,
   SmartFavoritesSettings
@@ -11,6 +15,33 @@ import type {
 type SnippetAnalysisResult = {
   summary: string
   tags: string[]
+}
+
+const estimateTokens = (text: string) => Math.max(1, Math.ceil(text.length / 4))
+
+function resolveProvider(
+  settings: SmartFavoritesSettings,
+  providerId?: string
+): AiModelProfile {
+  const candidates = settings.providers?.length
+    ? settings.providers
+    : [
+        {
+          id: settings.activeProviderId || "default-provider",
+          label: settings.provider.model || "默认模型",
+          ...settings.provider
+        }
+      ]
+
+  return (
+    candidates.find((provider) => provider.id === providerId) ??
+    candidates.find((provider) => provider.id === settings.activeProviderId) ??
+    candidates[0]
+  )
+}
+
+function hasProviderConfig(provider: Pick<AiModelProfile, "apiKey" | "baseUrl" | "model">) {
+  return Boolean(provider.apiKey && provider.baseUrl && provider.model)
 }
 
 function renderTemplate(
@@ -138,19 +169,17 @@ export const analyzeSnippetContent = async (
   text: string,
   settings: SmartFavoritesSettings
 ): Promise<SnippetAnalysisResult> => {
-  if (
-    !settings.provider.apiKey ||
-    !settings.provider.baseUrl ||
-    !settings.provider.model
-  ) {
+  const provider = resolveProvider(settings)
+
+  if (!hasProviderConfig(provider)) {
     return heuristicSnippetAnalysis(text)
   }
 
   try {
     const result = await generateText({
-      apiKey: settings.provider.apiKey,
-      baseURL: settings.provider.baseUrl,
-      model: settings.provider.model,
+      apiKey: provider.apiKey,
+      baseURL: provider.baseUrl,
+      model: provider.model,
       temperature: 0.2,
       messages: [
         {
@@ -192,10 +221,12 @@ export async function extractAiRecommendations(
   settings: SmartFavoritesSettings,
   fallback: RecommendationResult
 ): Promise<RecommendationResult> {
+  const provider = resolveProvider(settings)
+
   const result = await generateText({
-    apiKey: settings.provider.apiKey,
-    baseURL: settings.provider.baseUrl,
-    model: settings.provider.model,
+    apiKey: provider.apiKey,
+    baseURL: provider.baseUrl,
+    model: provider.model,
     temperature: 0.2,
     response_format: {
       type: "json_schema",
@@ -255,3 +286,101 @@ export async function extractAiRecommendations(
     suggestions: suggestions.length > 0 ? suggestions : fallback.suggestions
   }
 }
+
+function buildDigestPrompt(page: PageContext, content: string, prompt?: string) {
+  return [
+    "请把这个网页当作博客文章来处理，抽取成便于后续给 AI 使用的中文材料。",
+    "输出要求：",
+    "1. 先给出基础信息，尽量覆盖标题、作者、日期、网址、站点、描述。",
+    "2. 然后给出“文章关键信息抓取”，覆盖全文关键论点、结构、结论、重要事实和示例。",
+    "3. 不要写与原文无关的推测；没有的信息直接写“未识别”。",
+    "4. 输出纯文本，层次清晰，适合继续喂给模型。",
+    prompt?.trim() ? `5. 额外用户要求：${prompt.trim()}` : ""
+  ]
+    .filter(Boolean)
+    .join("\n")
+    .concat(
+      `\n\n页面元信息：\n标题：${page.title || "未识别"}\n作者：${page.author || "未识别"}\n日期：${page.publishedAt || "未识别"}\n网址：${page.url || "未识别"}\n站点：${page.siteName || page.domain || "未识别"}\n描述：${page.description || "未识别"}\n\n页面内容：\n${content.slice(0, 24000)}`
+    )
+}
+
+function buildHeuristicDigest(payload: PageDigestRequest): string {
+  const page = payload.page
+  const normalizedContent = payload.content
+    .replace(/\n{3,}/g, "\n\n")
+    .trim()
+    .slice(0, 12000)
+
+  const sections = [
+    "基础信息",
+    `- 标题：${page.title || "未识别"}`,
+    `- 作者：${page.author || "未识别"}`,
+    `- 日期：${page.publishedAt || "未识别"}`,
+    `- 网址：${page.url || "未识别"}`,
+    `- 站点：${page.siteName || page.domain || "未识别"}`,
+    `- 描述：${page.description || "未识别"}`,
+    "",
+    "文章关键信息抓取",
+    normalizedContent || page.summary || "未抓取到足够正文。"
+  ]
+
+  if (payload.prompt?.trim()) {
+    sections.push("", "用户补充提示", payload.prompt.trim())
+  }
+
+  return sections.join("\n")
+}
+
+export async function summarizePageContent(
+  payload: PageDigestRequest,
+  settings: SmartFavoritesSettings
+): Promise<PageDigestResult> {
+  const provider = resolveProvider(settings, payload.providerId)
+  const fallback = buildHeuristicDigest(payload)
+
+  if (!hasProviderConfig(provider)) {
+    return {
+      modelLabel: provider.label || "未配置模型",
+      providerId: provider.id,
+      content: fallback,
+      tokenEstimate: estimateTokens(fallback)
+    }
+  }
+
+  try {
+    const result = await generateText({
+      apiKey: provider.apiKey,
+      baseURL: provider.baseUrl,
+      model: provider.model,
+      temperature: 0.2,
+      messages: [
+        {
+          role: "system",
+          content:
+            "你是网页内容整理助手。请将页面整理成 AI 易读、信息密度高、结构清晰的中文纯文本。"
+        },
+        {
+          role: "user",
+          content: buildDigestPrompt(payload.page, payload.content, payload.prompt)
+        }
+      ]
+    })
+
+    const content = result.text?.trim() || fallback
+    return {
+      modelLabel: provider.label || provider.model,
+      providerId: provider.id,
+      content,
+      tokenEstimate: estimateTokens(content)
+    }
+  } catch {
+    return {
+      modelLabel: provider.label || provider.model,
+      providerId: provider.id,
+      content: fallback,
+      tokenEstimate: estimateTokens(fallback)
+    }
+  }
+}
+
+export { estimateTokens, resolveProvider, hasProviderConfig }

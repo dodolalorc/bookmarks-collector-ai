@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from "vue"
 
 import { SmartFavoritesSDK } from "../sdk/client"
+import { GITHUB_REPO_URL } from "../sdk/constants"
 import type {
   BookmarkMutationResult,
   CapturePageResponse,
@@ -36,6 +37,19 @@ const selectedSuggestion = computed(() =>
     (item) => item.key === selectedTarget.value
   )
 )
+
+const activeModelLabel = computed(() => {
+  if (!settings.value) {
+    return "未配置 AI 模型"
+  }
+
+  const activeProvider =
+    settings.value.providers.find(
+      (provider) => provider.id === settings.value?.activeProviderId
+    ) ?? settings.value.providers[0]
+
+  return activeProvider?.label || activeProvider?.model || "未配置 AI 模型"
+})
 
 const quickFacts = computed(() => {
   if (!capture.value?.page) {
@@ -235,6 +249,10 @@ const quickCapture = async () => {
     isLoading.value = false
   }
 }
+
+const openGithub = () => {
+  window.open(GITHUB_REPO_URL, "_blank", "noopener,noreferrer")
+}
 </script>
 
 <template>
@@ -247,10 +265,16 @@ const quickCapture = async () => {
             eyebrow="Smart Favorites AI"
             title="AI 智能书签分类助手"
             subtitle="优先推荐，不自动替你改结构。你确认后，插件才会移动或创建书签。" />
-          <BaseButton variant="primary" @click="refreshCapture">
-            <font-awesome-icon icon="rotate-right" />
-            重新抓取
-          </BaseButton>
+          <div class="hero-actions">
+            <BaseButton @click="openGithub">
+              <font-awesome-icon icon="up-right-from-square" />
+              GitHub
+            </BaseButton>
+            <BaseButton variant="primary" @click="refreshCapture">
+              <font-awesome-icon icon="rotate-right" />
+              重新抓取
+            </BaseButton>
+          </div>
         </div>
       </BaseCard>
 
@@ -277,8 +301,8 @@ const quickCapture = async () => {
         <div class="row">
           <strong>当前页面</strong>
           <span class="muted">{{
-            settings?.provider.model
-              ? `模型：${settings.provider.model}`
+            activeModelLabel !== "未配置 AI 模型"
+              ? `模型：${activeModelLabel}`
               : "未配置 AI 模型"
           }}</span>
         </div>
@@ -382,6 +406,13 @@ const quickCapture = async () => {
   justify-content: space-between;
   align-items: flex-start;
   gap: var(--sf-space-3);
+}
+
+.hero-actions {
+  display: flex;
+  gap: var(--sf-space-2);
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .muted {

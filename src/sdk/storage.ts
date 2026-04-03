@@ -1,5 +1,10 @@
-import { DEFAULT_SETTINGS, STORAGE_KEYS } from "~/src/sdk/constants"
+import {
+  DEFAULT_PROVIDER_ID,
+  DEFAULT_SETTINGS,
+  STORAGE_KEYS
+} from "~/src/sdk/constants"
 import type {
+  AiModelProfile,
   CapturedSnippet,
   KnowledgeRecord,
   PageCaptureDraft,
@@ -87,15 +92,67 @@ async function getLocal<T>(key: string, fallback: T): Promise<T> {
   return (result[key] as T | undefined) ?? fallback
 }
 
+function normalizeProviders(
+  settings?: Partial<SmartFavoritesSettings>
+): Pick<SmartFavoritesSettings, "provider" | "providers" | "activeProviderId"> {
+  const legacyProvider = {
+    ...DEFAULT_SETTINGS.provider,
+    ...settings?.provider
+  }
+
+  const providersSource = settings?.providers?.length
+    ? settings.providers
+    : [
+        {
+          id: DEFAULT_PROVIDER_ID,
+          label: legacyProvider.model?.trim() || "默认模型",
+          ...legacyProvider
+        }
+      ]
+
+  const providers = providersSource
+    .map((provider, index): AiModelProfile => ({
+      id: provider.id?.trim() || `${DEFAULT_PROVIDER_ID}-${index + 1}`,
+      label: provider.label?.trim() || provider.model?.trim() || `模型 ${index + 1}`,
+      baseUrl: provider.baseUrl?.trim() || DEFAULT_SETTINGS.provider.baseUrl,
+      apiKey: provider.apiKey ?? "",
+      model: provider.model?.trim() ?? ""
+    }))
+    .filter((provider, index, list) =>
+      list.findIndex((item) => item.id === provider.id) === index
+    )
+
+  if (providers.length === 0) {
+    providers.push({
+      id: DEFAULT_PROVIDER_ID,
+      label: "默认模型",
+      ...DEFAULT_SETTINGS.provider
+    })
+  }
+
+  const activeProvider =
+    providers.find((provider) => provider.id === settings?.activeProviderId) ??
+    providers[0]
+
+  return {
+    provider: {
+      baseUrl: activeProvider.baseUrl,
+      apiKey: activeProvider.apiKey,
+      model: activeProvider.model
+    },
+    providers,
+    activeProviderId: activeProvider.id
+  }
+}
+
 export async function getSettings(): Promise<SmartFavoritesSettings> {
   const settings = await getLocal(STORAGE_KEYS.settings, DEFAULT_SETTINGS)
+  const providerState = normalizeProviders(settings)
+
   return {
     ...DEFAULT_SETTINGS,
     ...settings,
-    provider: {
-      ...DEFAULT_SETTINGS.provider,
-      ...settings.provider
-    },
+    ...providerState,
     prompts: {
       ...DEFAULT_SETTINGS.prompts,
       ...settings.prompts
@@ -108,8 +165,13 @@ export async function getSettings(): Promise<SmartFavoritesSettings> {
 }
 
 export async function saveSettings(settings: SmartFavoritesSettings) {
+  const normalized = {
+    ...settings,
+    ...normalizeProviders(settings)
+  }
+
   await chrome.storage.local.set({
-    [STORAGE_KEYS.settings]: settings
+    [STORAGE_KEYS.settings]: normalized
   })
 }
 

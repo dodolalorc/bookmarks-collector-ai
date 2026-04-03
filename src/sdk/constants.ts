@@ -1,5 +1,8 @@
 import type { SmartFavoritesSettings } from "~/src/sdk/types"
 
+export const DEFAULT_PROVIDER_ID = "default-provider"
+export const GITHUB_REPO_URL = "https://github.com/dodolalorc/bookmarks-collector-ai"
+
 export const STORAGE_KEYS = {
   settings: "bookmarks-collector/settings",
   knowledge: "bookmarks-collector/knowledge",
@@ -44,6 +47,16 @@ export const DEFAULT_SETTINGS: SmartFavoritesSettings = {
     apiKey: "",
     model: ""
   },
+  providers: [
+    {
+      id: DEFAULT_PROVIDER_ID,
+      label: "默认模型",
+      baseUrl: "https://api.openai.com/v1",
+      apiKey: "",
+      model: ""
+    }
+  ],
+  activeProviderId: DEFAULT_PROVIDER_ID,
   prompts: {
     system: DEFAULT_SYSTEM_PROMPT,
     template: DEFAULT_PROMPT_TEMPLATE

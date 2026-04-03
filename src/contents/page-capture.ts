@@ -4,8 +4,10 @@ import "../ui/design-tokens.css"
 
 import { registerFontAwesome } from "../ui/fontawesome"
 import type {
+  AiModelProfile,
   CapturedSnippet,
   CapturePageResponse,
+  PageContext,
   PageCaptureDraft
 } from "../sdk/types"
 import {
@@ -20,6 +22,7 @@ import {
   createSnippet,
   cssPathFor,
   getCurrentSelectionText,
+  getPageArticleText,
   getPageContext
 } from "./capture/extract"
 import PageCaptureOverlay from "./PageCaptureOverlay.vue"
@@ -29,14 +32,31 @@ export const config: PlasmoCSConfig = {
 }
 
 const SIDEBAR_WIDTH = 348
+const AI_PANEL_WIDTH = 560
+
+const estimateTokens = (text: string) => Math.max(1, Math.ceil(text.length / 4))
 
 type OverlayState = {
   draft: PageCaptureDraft
   sidebarOpen: boolean
+  aiPanelOpen: boolean
   elementPickMode: boolean
   status: string
+  aiStatus: string
   bookmarkPromptVisible: boolean
   selectionText: string
+  articleTitle: string
+  articleUrl: string
+  articleAuthor: string
+  articleDate: string
+  articleContent: string
+  aiPrompt: string
+  aiModelId: string
+  aiModelLabel: string
+  aiTokenEstimate: number
+  aiCharCount: number
+  aiRunning: boolean
+  aiModels: AiModelProfile[]
   selectionAnchorVisible: boolean
   selectionAnchorHovered: boolean
   selectionAnchor: {
@@ -52,10 +72,24 @@ const state = reactive<OverlayState>({
     updatedAt: new Date().toISOString()
   },
   sidebarOpen: false,
+  aiPanelOpen: false,
   elementPickMode: false,
   status: "等待抓取",
+  aiStatus: "等待整理当前页面…",
   bookmarkPromptVisible: false,
   selectionText: "",
+  articleTitle: "",
+  articleUrl: location.href,
+  articleAuthor: "",
+  articleDate: "",
+  articleContent: "",
+  aiPrompt: "",
+  aiModelId: "",
+  aiModelLabel: "",
+  aiTokenEstimate: 0,
+  aiCharCount: 0,
+  aiRunning: false,
+  aiModels: [],
   selectionAnchorVisible: false,
   selectionAnchorHovered: false,
   selectionAnchor: {
@@ -84,7 +118,37 @@ const fetchDraft = async () => {
     "bookmarks-collector/get-capture-draft",
     location.href
   )
+  hydrateArticleFields(getPageContext())
+  await hydrateModels()
   renderOverlay()
+}
+
+const hydrateArticleFields = (page: PageContext) => {
+  const articleContent = getPageArticleText()
+  state.articleTitle = page.title || document.title || location.hostname
+  state.articleUrl = page.url || location.href
+  state.articleAuthor = page.author || ""
+  state.articleDate = page.publishedAt || ""
+  state.articleContent = articleContent
+  state.aiCharCount = articleContent.length
+  state.aiTokenEstimate = estimateTokens(articleContent)
+}
+
+const hydrateModels = async () => {
+  const settings = await sendMessage<{
+    provider: {
+      model: string
+    }
+    providers: AiModelProfile[]
+    activeProviderId: string
+  }>("bookmarks-collector/get-settings")
+
+  state.aiModels = settings.providers ?? []
+  state.aiModelId = settings.activeProviderId || settings.providers?.[0]?.id || ""
+  const activeModel =
+    settings.providers.find((provider) => provider.id === state.aiModelId) ??
+    settings.providers[0]
+  state.aiModelLabel = activeModel?.label || activeModel?.model || settings.provider.model || "未配置模型"
 }
 
 const storeSnippet = async (snippet: CapturedSnippet) => {
@@ -163,6 +227,13 @@ const renderOverlay = () => {
       state.sidebarOpen = !state.sidebarOpen
       renderOverlay()
     },
+    onToggleAiPanel: () => {
+      state.aiPanelOpen = !state.aiPanelOpen
+      if (state.aiPanelOpen) {
+        hydrateArticleFields(getPageContext())
+      }
+      renderOverlay()
+    },
     onCaptureSelection: () => {
       void captureSelection()
     },
@@ -191,6 +262,58 @@ const renderOverlay = () => {
     },
     onOpenHistory: () => {
       void openExtensionPage("tabs/manage.html#history")
+    },
+    onOpenGithub: () => {
+      window.open("https://github.com/dodolalorc/bookmarks-collector-ai", "_blank", "noopener,noreferrer")
+    },
+    onRefreshArticle: () => {
+      hydrateArticleFields(getPageContext())
+      state.aiStatus = "已重新抓取当前页面正文。"
+      renderOverlay()
+    },
+    onUpdateArticleMeta: (payload: {
+      title?: string
+      url?: string
+      author?: string
+      date?: string
+      content?: string
+      prompt?: string
+      modelId?: string
+    }) => {
+      if (typeof payload.title === "string") {
+        state.articleTitle = payload.title
+      }
+      if (typeof payload.url === "string") {
+        state.articleUrl = payload.url
+      }
+      if (typeof payload.author === "string") {
+        state.articleAuthor = payload.author
+      }
+      if (typeof payload.date === "string") {
+        state.articleDate = payload.date
+      }
+      if (typeof payload.content === "string") {
+        state.articleContent = payload.content
+        state.aiCharCount = payload.content.length
+        state.aiTokenEstimate = estimateTokens(payload.content)
+      }
+      if (typeof payload.prompt === "string") {
+        state.aiPrompt = payload.prompt
+      }
+      if (typeof payload.modelId === "string") {
+        state.aiModelId = payload.modelId
+        const activeModel =
+          state.aiModels.find((provider) => provider.id === payload.modelId) ??
+          state.aiModels[0]
+        state.aiModelLabel = activeModel?.label || activeModel?.model || "未配置模型"
+        void sendMessage("bookmarks-collector/update-active-provider", {
+          providerId: payload.modelId
+        }).catch(() => undefined)
+      }
+      renderOverlay()
+    },
+    onSummarizeArticle: () => {
+      void summarizeArticle()
     },
     onClassifyNow: () => {
       state.bookmarkPromptVisible = false
@@ -233,6 +356,52 @@ const captureSelection = async () => {
   state.selectionAnchorVisible = false
   state.selectionAnchorHovered = false
   renderOverlay()
+}
+
+const summarizeArticle = async () => {
+  if (!state.articleContent.trim()) {
+    state.aiStatus = "当前页面没有抓取到可整理的正文。"
+    renderOverlay()
+    return
+  }
+
+  state.aiRunning = true
+  state.aiStatus = "正在将当前页面整理成 AI 易读格式…"
+  renderOverlay()
+
+  try {
+    const page = getPageContext()
+    const result = await sendMessage<{
+      modelLabel: string
+      providerId: string
+      content: string
+      tokenEstimate: number
+    }>("bookmarks-collector/summarize-page-content", {
+      page: {
+        ...page,
+        title: state.articleTitle.trim() || page.title,
+        url: state.articleUrl.trim() || page.url,
+        author: state.articleAuthor.trim() || page.author,
+        publishedAt: state.articleDate.trim() || page.publishedAt
+      },
+      content: state.articleContent,
+      prompt: state.aiPrompt,
+      providerId: state.aiModelId
+    })
+
+    state.articleContent = result.content
+    state.aiCharCount = result.content.length
+    state.aiTokenEstimate = result.tokenEstimate
+    state.aiModelId = result.providerId
+    state.aiModelLabel = result.modelLabel
+    state.aiStatus = `已完成一键总结，当前使用模型：${result.modelLabel}`
+  } catch (error) {
+    state.aiStatus =
+      error instanceof Error ? error.message : "AI 整理失败，请稍后再试。"
+  } finally {
+    state.aiRunning = false
+    renderOverlay()
+  }
 }
 
 const updateSelectionAnchor = () => {
