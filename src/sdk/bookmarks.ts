@@ -23,6 +23,17 @@ function rootTitleFor(node: chrome.bookmarks.BookmarkTreeNode) {
   return node.title || "Untitled"
 }
 
+function normalizeFolderSegments(input: string) {
+  return input
+    .split("/")
+    .map((segment) => segment.trim())
+    .filter(
+      (segment) =>
+        Boolean(segment) &&
+        !["新建", "新建分类", "新建文件夹"].includes(segment)
+    )
+}
+
 function walkFolders(
   node: chrome.bookmarks.BookmarkTreeNode,
   trail: string[],
@@ -106,7 +117,7 @@ export async function listBookmarks(limit = 200): Promise<BookmarkItem[]> {
     .slice(0, limit)
 }
 
-async function ensureFolderByPath(title: string) {
+async function ensureFolderByPath(pathOrTitle: string) {
   const tree = await chrome.bookmarks.getTree()
   const bookmarkBar = findBookmarkBar(tree[0])
 
@@ -114,18 +125,30 @@ async function ensureFolderByPath(title: string) {
     throw new Error("未找到浏览器书签栏，无法创建文件夹。")
   }
 
-  const existing = (bookmarkBar.children ?? []).find(
-    (child) => !child.url && child.title === title
-  )
-
-  if (existing) {
-    return existing
+  const segments = normalizeFolderSegments(pathOrTitle)
+  if (segments.length === 0) {
+    throw new Error("文件夹路径不能为空。")
   }
 
-  return chrome.bookmarks.create({
-    parentId: bookmarkBar.id,
-    title
-  })
+  let current = bookmarkBar
+
+  for (const segment of segments) {
+    const existing = (current.children ?? []).find(
+      (child) => !child.url && child.title.trim() === segment
+    )
+
+    if (existing) {
+      current = existing
+      continue
+    }
+
+    current = await chrome.bookmarks.create({
+      parentId: current.id,
+      title: segment
+    })
+  }
+
+  return current
 }
 
 function findBookmarkBar(node?: chrome.bookmarks.BookmarkTreeNode) {
@@ -160,7 +183,13 @@ async function resolveFolder(payload: ApplyBookmarkPayload) {
     }
   }
 
-  return ensureFolderByPath(payload.recommendation.title)
+  const requestedPath =
+    payload.recommendation.type === "create"
+      ? payload.recommendation.path.replace(/^新建\s*\/\s*/u, "").trim() ||
+        payload.recommendation.title
+      : payload.recommendation.title
+
+  return ensureFolderByPath(requestedPath)
 }
 
 export async function applyBookmarkDecision(

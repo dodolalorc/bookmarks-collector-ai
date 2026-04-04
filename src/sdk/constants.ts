@@ -7,7 +7,8 @@ export const STORAGE_KEYS = {
   settings: "bookmarks-collector/settings",
   knowledge: "bookmarks-collector/knowledge",
   drafts: "bookmarks-collector/drafts",
-  collections: "bookmarks-collector/collections"
+  collections: "bookmarks-collector/collections",
+  recommendationFeedback: "bookmarks-collector/recommendation-feedback"
 } as const
 
 export const DEFAULT_SYSTEM_PROMPT =

@@ -29,6 +29,13 @@ export interface RecommendationResult {
     suggestions: FolderSuggestion[]
 }
 
+export interface RecommendationFeedbackEntry {
+    folderPath: string
+    domain?: string
+    tokens: string[]
+    createdAt: string
+}
+
 export interface ApplyBookmarkPayload {
     page: PageContext
     input: RecommendationInput

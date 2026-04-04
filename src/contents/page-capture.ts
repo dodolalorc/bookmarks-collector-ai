@@ -1,7 +1,8 @@
-import type { PlasmoCSConfig } from "plasmo"
+﻿import type { PlasmoCSConfig } from "plasmo"
 import { createApp, reactive } from "vue"
 import "../ui/design-tokens.css"
 
+import { getProviderConfigNotice } from "../sdk/provider"
 import { registerFontAwesome } from "../ui/fontawesome"
 import type {
   AiModelProfile,
@@ -31,18 +32,22 @@ export const config: PlasmoCSConfig = {
   matches: ["<all_urls>"]
 }
 
-const SIDEBAR_WIDTH = 348
-const AI_PANEL_WIDTH = 560
+const SIDEBAR_MIN_WIDTH = 400
+const SIDEBAR_MAX_WIDTH = 720
+const DEFAULT_SIDEBAR_WIDTH = 420
 
 const estimateTokens = (text: string) => Math.max(1, Math.ceil(text.length / 4))
 
 type OverlayState = {
   draft: PageCaptureDraft
   sidebarOpen: boolean
-  aiPanelOpen: boolean
+  sidebarWidth: number
+  aiDialogOpen: boolean
   elementPickMode: boolean
   status: string
   aiStatus: string
+  aiConfigNotice: string
+  aiConfigured: boolean
   bookmarkPromptVisible: boolean
   selectionText: string
   articleTitle: string
@@ -72,10 +77,13 @@ const state = reactive<OverlayState>({
     updatedAt: new Date().toISOString()
   },
   sidebarOpen: false,
-  aiPanelOpen: false,
+  sidebarWidth: DEFAULT_SIDEBAR_WIDTH,
+  aiDialogOpen: false,
   elementPickMode: false,
   status: "等待抓取",
   aiStatus: "等待整理当前页面…",
+  aiConfigNotice: "",
+  aiConfigured: false,
   bookmarkPromptVisible: false,
   selectionText: "",
   articleTitle: "",
@@ -99,6 +107,15 @@ const state = reactive<OverlayState>({
 })
 
 let overlayMounted = false
+
+const clampSidebarWidth = (width: number) =>
+  Math.max(SIDEBAR_MIN_WIDTH, Math.min(SIDEBAR_MAX_WIDTH, Math.round(width)))
+
+const applyViewportInset = () => {
+  const width = state.sidebarOpen ? `${state.sidebarWidth}px` : "0px"
+  document.documentElement.style.marginRight = width
+  document.body.style.marginRight = width
+}
 
 const sendMessage = async <T>(type: string, payload?: unknown) => {
   const response = await chrome.runtime.sendMessage({
@@ -138,6 +155,8 @@ const hydrateModels = async () => {
   const settings = await sendMessage<{
     provider: {
       model: string
+      apiKey?: string
+      baseUrl?: string
     }
     providers: AiModelProfile[]
     activeProviderId: string
@@ -148,7 +167,15 @@ const hydrateModels = async () => {
   const activeModel =
     settings.providers.find((provider) => provider.id === state.aiModelId) ??
     settings.providers[0]
-  state.aiModelLabel = activeModel?.label || activeModel?.model || settings.provider.model || "未配置模型"
+
+  state.aiModelLabel =
+    activeModel?.label || activeModel?.model || settings.provider.model || "未配置模型"
+  state.aiConfigured = Boolean(
+    activeModel?.apiKey?.trim() && activeModel?.baseUrl?.trim() && activeModel?.model?.trim()
+  )
+  state.aiConfigNotice = activeModel
+    ? getProviderConfigNotice(activeModel)
+    : "尚未配置模型，请前往插件管理页 > 模型配置进行配置。"
 }
 
 const storeSnippet = async (snippet: CapturedSnippet) => {
@@ -185,12 +212,12 @@ const analyzeSnippet = async (snippetId: string) => {
     }
   )
 
-  state.status = "已完成段落分析。"
+  state.status = "该片段分析完成。"
   renderOverlay()
 }
 
 const analyzeAllSnippets = async (force = false) => {
-  state.status = force ? "正在重新分析全部段落…" : "正在分析全部段落…"
+  state.status = force ? "正在重新分析全部片段…" : "正在分析全部片段…"
   renderOverlay()
 
   state.draft = await sendMessage<PageCaptureDraft>(
@@ -201,7 +228,7 @@ const analyzeAllSnippets = async (force = false) => {
     }
   )
 
-  state.status = force ? "全部段落已重新分析。" : "全部段落已分析完成。"
+  state.status = force ? "全部片段已重新分析。" : "全部片段分析完成。"
   renderOverlay()
 }
 
@@ -210,9 +237,9 @@ const openExtensionPage = async (path: string) => {
     path
   })
 }
-
 const renderOverlay = () => {
   state.selectionText = getCurrentSelectionText()
+  applyViewportInset()
 
   if (overlayMounted) {
     return
@@ -221,18 +248,42 @@ const renderOverlay = () => {
   overlayMounted = true
 
   const app = createApp(PageCaptureOverlay, {
-    sidebarWidth: SIDEBAR_WIDTH,
     state,
     onToggleSidebar: () => {
       state.sidebarOpen = !state.sidebarOpen
+      applyViewportInset()
       renderOverlay()
     },
-    onToggleAiPanel: () => {
-      state.aiPanelOpen = !state.aiPanelOpen
-      if (state.aiPanelOpen) {
+    onToggleAiDialog: () => {
+      state.aiDialogOpen = !state.aiDialogOpen
+      if (state.aiDialogOpen) {
         hydrateArticleFields(getPageContext())
+        void hydrateModels()
       }
       renderOverlay()
+    },
+    onCloseAiDialog: () => {
+      state.aiDialogOpen = false
+      renderOverlay()
+    },
+    onStartSidebarResize: (event: MouseEvent) => {
+      const startX = event.clientX
+      const startWidth = state.sidebarWidth
+
+      const onMouseMove = (moveEvent: MouseEvent) => {
+        const nextWidth = clampSidebarWidth(startWidth + (startX - moveEvent.clientX))
+        state.sidebarWidth = nextWidth
+        applyViewportInset()
+        renderOverlay()
+      }
+
+      const stopResize = () => {
+        document.removeEventListener("mousemove", onMouseMove, true)
+        document.removeEventListener("mouseup", stopResize, true)
+      }
+
+      document.addEventListener("mousemove", onMouseMove, true)
+      document.addEventListener("mouseup", stopResize, true)
     },
     onCaptureSelection: () => {
       void captureSelection()
@@ -240,6 +291,7 @@ const renderOverlay = () => {
     onToggleElementMode: () => {
       state.elementPickMode = !state.elementPickMode
       state.sidebarOpen = true
+      applyViewportInset()
       state.status = state.elementPickMode
         ? "框选模式已开启，点击页面区域即可抓取一段内容。"
         : "框选模式已关闭。"
@@ -262,6 +314,9 @@ const renderOverlay = () => {
     },
     onOpenHistory: () => {
       void openExtensionPage("tabs/manage.html#history")
+    },
+    onOpenQuickStart: () => {
+      void openExtensionPage("tabs/manage.html#quickstart")
     },
     onOpenGithub: () => {
       window.open("https://github.com/dodolalorc/bookmarks-collector-ai", "_blank", "noopener,noreferrer")
@@ -306,6 +361,12 @@ const renderOverlay = () => {
           state.aiModels.find((provider) => provider.id === payload.modelId) ??
           state.aiModels[0]
         state.aiModelLabel = activeModel?.label || activeModel?.model || "未配置模型"
+        state.aiConfigured = Boolean(
+          activeModel?.apiKey?.trim() && activeModel?.baseUrl?.trim() && activeModel?.model?.trim()
+        )
+        state.aiConfigNotice = activeModel
+          ? getProviderConfigNotice(activeModel)
+          : "尚未配置模型，请前往插件管理页 > 模型配置进行配置。"
         void sendMessage("bookmarks-collector/update-active-provider", {
           providerId: payload.modelId
         }).catch(() => undefined)
@@ -318,7 +379,8 @@ const renderOverlay = () => {
     onClassifyNow: () => {
       state.bookmarkPromptVisible = false
       state.sidebarOpen = true
-      state.status = "已打开当前书签页侧边栏，你可以先补充关键知识点，再进行分类。"
+      applyViewportInset()
+      state.status = "已打开当前页面抓取面板。你可以先补充知识片段，再进入历史整理。"
       renderOverlay()
     },
     onDismissBookmarkPrompt: () => {
@@ -351,14 +413,21 @@ const captureSelection = async () => {
   }
 
   await storeSnippet(createSnippet("selection", text.slice(0, 2000), "selection"))
-  state.status = "已把选中文本加入当前书签页知识列表。"
+  state.status = "已把选中文本加入当前页面知识列表。"
   state.sidebarOpen = true
   state.selectionAnchorVisible = false
   state.selectionAnchorHovered = false
+  applyViewportInset()
   renderOverlay()
 }
 
 const summarizeArticle = async () => {
+  if (!state.aiConfigured) {
+    state.aiStatus = state.aiConfigNotice || "尚未配置模型，请前往插件管理页 > 模型配置进行配置。"
+    renderOverlay()
+    return
+  }
+
   if (!state.articleContent.trim()) {
     state.aiStatus = "当前页面没有抓取到可整理的正文。"
     renderOverlay()
@@ -403,7 +472,6 @@ const summarizeArticle = async () => {
     renderOverlay()
   }
 }
-
 const updateSelectionAnchor = () => {
   const selection = window.getSelection?.()
   const text = selection?.toString().trim() ?? ""
@@ -490,6 +558,7 @@ const bindElementPicker = () => {
       state.status = `已加入一个页面区域：${target.tagName.toLowerCase()}`
       state.sidebarOpen = true
       state.bookmarkPromptVisible = false
+      applyViewportInset()
       hideHighlight(highlight)
       renderOverlay()
     },

@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from "vue"
 
 import { SmartFavoritesSDK } from "../sdk/client"
 import { GITHUB_REPO_URL } from "../sdk/constants"
+import { getProviderConfigNotice, resolveProvider } from "../sdk/provider"
 import type {
   BookmarkMutationResult,
   CapturePageResponse,
@@ -49,6 +50,14 @@ const activeModelLabel = computed(() => {
     ) ?? settings.value.providers[0]
 
   return activeProvider?.label || activeProvider?.model || "未配置 AI 模型"
+})
+
+const activeProviderNotice = computed(() => {
+  if (!settings.value) {
+    return ""
+  }
+
+  return getProviderConfigNotice(resolveProvider(settings.value))
 })
 
 const quickFacts = computed(() => {
@@ -161,7 +170,8 @@ const runRecommendation = async () => {
     status.value =
       nextRecommendation.source === "ai"
         ? "已完成 AI 推荐，请确认后执行。"
-        : "已完成本地推荐。配置模型后可获得更强的分类建议。"
+        : activeProviderNotice.value ||
+          "尚未配置模型，请前往插件管理页 > 模型配置进行配置。当前已使用本地推荐。"
   } catch (error) {
     status.value =
       error instanceof Error ? error.message : "推荐失败，请稍后再试。"

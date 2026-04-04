@@ -14,6 +14,8 @@ import type {
   DeleteCollectionItemPayload,
   ExportSnapshot,
   HistoryRecommendationItem,
+  ImportSnapshotResult,
+  KnowledgeRecord,
   MoveCollectionItemPayload,
   PageDigestRequest,
   PageDigestResult,
@@ -123,6 +125,13 @@ export class SmartFavoritesSDK {
     return sendRuntimeMessage<ExportSnapshot>("bookmarks-collector/export-snapshot")
   }
 
+  async importSnapshot(snapshot: ExportSnapshot) {
+    return sendRuntimeMessage<ImportSnapshotResult>(
+      "bookmarks-collector/import-snapshot",
+      snapshot
+    )
+  }
+
   async listHistoryBookmarks(limit = 40) {
     return sendRuntimeMessage<HistoryRecommendationItem[]>(
       "bookmarks-collector/list-history-bookmarks",
@@ -154,6 +163,12 @@ export class SmartFavoritesSDK {
   async getSnippetCollections() {
     return sendRuntimeMessage<SnippetCollectionState>(
       "bookmarks-collector/get-snippet-collections"
+    )
+  }
+
+  async getKnowledgeRecords() {
+    return sendRuntimeMessage<KnowledgeRecord[]>(
+      "bookmarks-collector/get-knowledge-records"
     )
   }
 

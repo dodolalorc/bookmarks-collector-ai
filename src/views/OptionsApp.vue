@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from "vue"
 
 import { SmartFavoritesSDK } from "../sdk/client"
+import { getProviderConfigNotice, resolveProvider } from "../sdk/provider"
 import {
   DEFAULT_PROMPT_TEMPLATE,
   DEFAULT_SYSTEM_PROMPT,
@@ -12,6 +13,7 @@ import type {
   BookmarkMoveDecision,
   ExportSnapshot,
   HistoryRecommendationItem,
+  KnowledgeRecord,
   SmartFavoritesSettings,
   SnippetCollectionFolder,
   SnippetCollectionItem,
@@ -26,10 +28,17 @@ import HistoryItemCard from "./HistoryItemCard.vue"
 
 const sdk = new SmartFavoritesSDK()
 
+const importInput = ref<HTMLInputElement | null>(null)
 const settings = ref<SmartFavoritesSettings | null>(null)
 const status = ref("正在加载设置…")
-const tab = ref<"settings" | "history">(
-  location.hash === "#history" ? "history" : "settings"
+const tab = ref<"quickstart" | "settings" | "history" | "knowledge">(
+  location.hash === "#quickstart"
+    ? "quickstart"
+    : location.hash === "#history"
+      ? "history"
+      : location.hash === "#knowledge"
+        ? "knowledge"
+        : "settings"
 )
 const historyItems = ref<HistoryRecommendationItem[]>([])
 const selectedIds = ref<string[]>([])
@@ -38,6 +47,9 @@ const collections = ref<SnippetCollectionState>({
   folders: [],
   items: []
 })
+const knowledgeRecords = ref<KnowledgeRecord[]>([])
+const knowledgeStatus = ref("正在加载知识记录…")
+const knowledgeQuery = ref("")
 const collectionsStatus = ref("正在加载收藏夹…")
 const showApiKey = ref(false)
 const activeFolderId = ref("uncategorized")
@@ -50,6 +62,34 @@ const expandedItemIds = ref<string[]>([])
 const editingItemId = ref("")
 const editingItemTitle = ref("")
 const editingItemText = ref("")
+
+const quickStartSections = [
+  {
+    title: "1. 先配置模型",
+    body:
+      "进入“模型配置”，填写 Base URL、API Key 和模型名。当前激活模型配置完整后，页面 AI 整理和智能推荐才会使用模型能力。"
+  },
+  {
+    title: "2. 在网页里抓取知识",
+    body:
+      "点击页面右侧上方悬浮球，打开“页面知识抓取”面板。它会像浏览器侧边工具一样挤压页面宽度，不再遮挡正文；你可以抓取选中文本，也可以开启框选模式。"
+  },
+  {
+    title: "3. 用 AI 整理页面",
+    body:
+      "点击下方悬浮球打开“AI 页面整理”弹窗。这里适合补全文章元信息、调整正文、输入额外提示词，再执行一键整理。"
+  },
+  {
+    title: "4. 管理抓取结果与历史书签",
+    body:
+      "“历史整理”页用于管理抓取片段、收藏夹和历史书签推荐；“知识笔记”页用于回看沉淀下来的知识记录。"
+  },
+  {
+    title: "5. 导入与导出配置",
+    body:
+      "“模型配置”页现在同时支持导出和导入备份。导入会恢复扩展内部的设置、知识记录、页面草稿和内容收藏，但不会直接改写浏览器已有书签结构。"
+  }
+]
 
 const selectedDecisions = computed<BookmarkMoveDecision[]>(() =>
   historyItems.value
@@ -81,6 +121,27 @@ const hasAnyManagedContent = computed(
     collections.value.folders.length > 1 || collections.value.items.length > 0
 )
 
+const filteredKnowledgeRecords = computed(() => {
+  const query = knowledgeQuery.value.trim().toLowerCase()
+  if (!query) {
+    return knowledgeRecords.value
+  }
+
+  return knowledgeRecords.value.filter((record) =>
+    [
+      record.title,
+      record.url,
+      record.folderPath,
+      record.tags.join(" "),
+      record.notes ?? "",
+      record.selectedText ?? ""
+    ]
+      .join("\n")
+      .toLowerCase()
+      .includes(query)
+  )
+})
+
 const activeProvider = computed(() => {
   if (!settings.value) {
     return null
@@ -95,13 +156,29 @@ const activeProvider = computed(() => {
   )
 })
 
+const activeProviderNotice = computed(() => {
+  if (!settings.value) {
+    return ""
+  }
+
+  return getProviderConfigNotice(resolveProvider(settings.value))
+})
+
 onMounted(() => {
   void loadSettings()
   void refreshHistory()
   void loadCollections()
+  void loadKnowledgeRecords()
 
   const onHashChange = () => {
-    tab.value = location.hash === "#history" ? "history" : "settings"
+    tab.value =
+      location.hash === "#quickstart"
+        ? "quickstart"
+        : location.hash === "#history"
+          ? "history"
+          : location.hash === "#knowledge"
+            ? "knowledge"
+            : "settings"
   }
 
   window.addEventListener("hashchange", onHashChange)
@@ -149,6 +226,14 @@ const loadCollections = async () => {
       : "第一次使用时，抓取的段落会先进入未分类内容。"
 }
 
+const loadKnowledgeRecords = async () => {
+  knowledgeRecords.value = await sdk.getKnowledgeRecords()
+  knowledgeStatus.value =
+    knowledgeRecords.value.length > 0
+      ? `已加载 ${knowledgeRecords.value.length} 条知识记录。`
+      : "当前还没有知识记录，执行书签确认后会在这里沉淀学习轨迹。"
+}
+
 const saveSettings = async () => {
   if (!settings.value) {
     return
@@ -176,6 +261,37 @@ const exportBackup = async () => {
   const snapshot = await sdk.exportSnapshot()
   downloadJson(snapshot)
   status.value = "已导出本地备份。"
+}
+
+const triggerImportBackup = () => {
+  importInput.value?.click()
+}
+
+const importBackup = async (event: Event) => {
+  const target = event.target
+  if (!(target instanceof HTMLInputElement) || !target.files?.[0]) {
+    return
+  }
+
+  try {
+    const text = await target.files[0].text()
+    const snapshot = JSON.parse(text) as ExportSnapshot
+    const result = await sdk.importSnapshot(snapshot)
+    await Promise.all([
+      loadSettings(),
+      loadCollections(),
+      loadKnowledgeRecords(),
+      refreshHistory()
+    ])
+    status.value =
+      `已导入备份：${result.knowledgeCount} 条知识记录，` +
+      `${result.draftCount} 个页面草稿，${result.collectionItemCount} 条内容片段。`
+  } catch (error) {
+    status.value =
+      error instanceof Error ? `导入失败：${error.message}` : "导入失败，请检查备份文件格式。"
+  } finally {
+    target.value = ""
+  }
 }
 
 const refreshHistory = async () => {
@@ -210,9 +326,16 @@ const toggleSelected = (id: string) => {
     : [...selectedIds.value, id]
 }
 
-const switchTab = (next: "settings" | "history") => {
+const switchTab = (next: "quickstart" | "settings" | "history" | "knowledge") => {
   tab.value = next
-  location.hash = next === "history" ? "#history" : ""
+  location.hash =
+    next === "quickstart"
+      ? "#quickstart"
+      : next === "history"
+        ? "#history"
+        : next === "knowledge"
+          ? "#knowledge"
+          : ""
 }
 
 const readInputValue = (event: Event) => {
@@ -525,16 +648,33 @@ const handleCollectionCardStartEdit = (itemId: string) => {
 
   startEditItem(target)
 }
+
+const formatKnowledgeTime = (value: string) => {
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString()
+}
 </script>
 
 <template>
   <main class="page">
     <BaseCard class="panel-head">
+      <input
+        ref="importInput"
+        type="file"
+        accept="application/json,.json"
+        class="hidden-input"
+        @change="importBackup" />
       <div>
         <div class="eyebrow">Workspace</div>
         <div class="title">插件管理台</div>
       </div>
       <div class="tab-actions">
+        <BaseButton
+          :variant="tab === 'quickstart' ? 'primary' : 'secondary'"
+          @click="switchTab('quickstart')">
+          <font-awesome-icon icon="book-open" />
+          快速开始
+        </BaseButton>
         <BaseButton
           :variant="tab === 'settings' ? 'primary' : 'secondary'"
           @click="switchTab('settings')">
@@ -547,6 +687,12 @@ const handleCollectionCardStartEdit = (itemId: string) => {
           <font-awesome-icon icon="bookmark" />
           历史整理
         </BaseButton>
+        <BaseButton
+          :variant="tab === 'knowledge' ? 'primary' : 'secondary'"
+          @click="switchTab('knowledge')">
+          <font-awesome-icon icon="book-open" />
+          知识笔记
+        </BaseButton>
         <BaseButton @click="openGithub">
           <font-awesome-icon icon="up-right-from-square" />
           GitHub
@@ -556,6 +702,26 @@ const handleCollectionCardStartEdit = (itemId: string) => {
 
     <template v-if="!settings">
       <BaseCard>{{ status }}</BaseCard>
+    </template>
+
+    <template v-else-if="tab === 'quickstart'">
+      <BaseCard class="quickstart-hero">
+        <SectionHeader
+          compact
+          title="快速开始"
+          subtitle="先把关键路径走通：模型配置、页面抓取、AI 整理、历史整理和备份导入导出。" />
+        <div class="status">
+          {{ activeProviderNotice || "当前模型配置完整，可以直接开始使用页面抓取和 AI 整理。" }}
+        </div>
+      </BaseCard>
+
+      <BaseCard
+        v-for="section in quickStartSections"
+        :key="section.title"
+        class="quickstart-card">
+        <div class="quickstart-title">{{ section.title }}</div>
+        <div class="quickstart-copy">{{ section.body }}</div>
+      </BaseCard>
     </template>
 
     <template v-else-if="tab === 'settings'">
@@ -608,6 +774,9 @@ const handleCollectionCardStartEdit = (itemId: string) => {
 
       <BaseCard v-if="activeProvider">
         <SectionHeader compact title="当前模型编辑" />
+        <div v-if="activeProviderNotice" class="config-notice">
+          {{ activeProviderNotice }}
+        </div>
         <FormField label="展示名称">
           <input
             class="field"
@@ -716,6 +885,10 @@ const handleCollectionCardStartEdit = (itemId: string) => {
             <font-awesome-icon icon="file-export" />
             导出备份
           </BaseButton>
+          <BaseButton @click="triggerImportBackup">
+            <font-awesome-icon icon="folder-open" />
+            导入备份
+          </BaseButton>
           <BaseButton @click="openGithub">
             <font-awesome-icon icon="up-right-from-square" />
             GitHub
@@ -728,7 +901,7 @@ const handleCollectionCardStartEdit = (itemId: string) => {
       </BaseCard>
     </template>
 
-    <template v-else>
+    <template v-else-if="tab === 'history'">
       <BaseCard class="history-header">
         <div>
           <SectionHeader compact title="历史整理" />
@@ -916,6 +1089,65 @@ const handleCollectionCardStartEdit = (itemId: string) => {
         </div>
       </BaseCard>
     </template>
+
+    <template v-else>
+      <BaseCard class="history-header">
+        <div>
+          <SectionHeader compact title="知识笔记库" />
+          <div class="status">{{ knowledgeStatus }}</div>
+        </div>
+        <div class="button-row">
+          <BaseButton @click="loadKnowledgeRecords">
+            <font-awesome-icon icon="arrows-rotate" />
+            刷新记录
+          </BaseButton>
+        </div>
+      </BaseCard>
+
+      <BaseCard>
+        <div class="knowledge-toolbar">
+          <input
+            v-model="knowledgeQuery"
+            class="field"
+            placeholder="搜索标题、标签、来源网址、目录路径或备注" />
+          <div class="status">
+            当前显示 {{ filteredKnowledgeRecords.length }} / {{ knowledgeRecords.length }} 条
+          </div>
+        </div>
+      </BaseCard>
+
+      <BaseCard v-if="filteredKnowledgeRecords.length === 0" class="soft-empty">
+        没有匹配的知识记录。可以先在浏览器中执行一次收藏确认，或换一个搜索词。
+      </BaseCard>
+
+      <BaseCard
+        v-for="record in filteredKnowledgeRecords"
+        :key="`${record.createdAt}-${record.url}`"
+        class="knowledge-card">
+        <div class="knowledge-head">
+          <div>
+            <div class="knowledge-title">{{ record.title }}</div>
+            <div class="knowledge-url">{{ record.url }}</div>
+          </div>
+          <div class="knowledge-time">{{ formatKnowledgeTime(record.createdAt) }}</div>
+        </div>
+        <div class="knowledge-meta">
+          <span>目录：{{ record.folderPath || "未记录" }}</span>
+          <span>来源：{{ record.source }}</span>
+        </div>
+        <div v-if="record.tags.length" class="tag-row">
+          <span v-for="tag in record.tags" :key="tag" class="tag-chip">{{ tag }}</span>
+        </div>
+        <div v-if="record.notes" class="knowledge-block">
+          <div class="knowledge-label">备注</div>
+          <div>{{ record.notes }}</div>
+        </div>
+        <div v-if="record.selectedText" class="knowledge-block">
+          <div class="knowledge-label">选中片段</div>
+          <div class="knowledge-quote">{{ record.selectedText }}</div>
+        </div>
+      </BaseCard>
+    </template>
   </main>
 </template>
 
@@ -982,6 +1214,37 @@ const handleCollectionCardStartEdit = (itemId: string) => {
   font-size: var(--sf-font-size-md);
   background: var(--sf-color-surface);
   resize: vertical;
+}
+
+.hidden-input {
+  display: none;
+}
+
+.config-notice,
+.quickstart-hero,
+.quickstart-card {
+  background: linear-gradient(135deg, rgba(255, 247, 224, 0.9), rgba(245, 250, 255, 0.96));
+}
+
+.config-notice {
+  margin-bottom: 16px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(235, 186, 92, 0.22);
+  color: #7a5a18;
+  line-height: 1.7;
+}
+
+.quickstart-title {
+  font-size: 18px;
+  font-weight: 800;
+  color: #22314f;
+}
+
+.quickstart-copy {
+  margin-top: 10px;
+  color: #5f6f89;
+  line-height: 1.8;
 }
 
 .provider-grid {
@@ -1105,6 +1368,11 @@ const handleCollectionCardStartEdit = (itemId: string) => {
 }
 
 .folder-form {
+  display: grid;
+  gap: 12px;
+}
+
+.knowledge-toolbar {
   display: grid;
   gap: 12px;
 }
@@ -1258,6 +1526,81 @@ const handleCollectionCardStartEdit = (itemId: string) => {
   line-height: 1.7;
 }
 
+.knowledge-card {
+  display: grid;
+  gap: 14px;
+}
+
+.knowledge-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.knowledge-title {
+  font-size: 18px;
+  font-weight: 800;
+  color: #22314f;
+}
+
+.knowledge-url {
+  margin-top: 6px;
+  color: #6f809d;
+  word-break: break-all;
+  font-size: 13px;
+}
+
+.knowledge-time {
+  color: #7b8ab1;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.knowledge-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 18px;
+  color: #607089;
+  font-size: 13px;
+}
+
+.knowledge-block {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+  border-radius: 16px;
+  background: #f7faff;
+  color: #24314a;
+  line-height: 1.7;
+}
+
+.knowledge-label {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #7b8ab1;
+}
+
+.knowledge-quote {
+  white-space: pre-wrap;
+}
+
+.tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tag-chip {
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #e8f3ff;
+  color: #4d6d99;
+  font-size: 12px;
+}
+
 @media (max-width: 980px) {
   .page {
     padding: 18px;
@@ -1270,7 +1613,8 @@ const handleCollectionCardStartEdit = (itemId: string) => {
   .panel-head,
   .row,
   .actions,
-  .history-header {
+  .history-header,
+  .knowledge-head {
     flex-direction: column;
     align-items: stretch;
   }

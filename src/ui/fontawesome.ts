@@ -2,6 +2,7 @@ import { library } from "@fortawesome/fontawesome-svg-core"
 import {
   faArrowsRotate,
   faBolt,
+  faBookOpen,
   faBookmark,
   faBrain,
   faCheck,
@@ -44,6 +45,7 @@ export const ensureFontAwesome = () => {
   library.add(
     faArrowsRotate,
     faBolt,
+    faBookOpen,
     faBookmark,
     faBrain,
     faCheck,

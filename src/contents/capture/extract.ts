@@ -3,6 +3,39 @@ import type { CapturedSnippet, PageContext } from "../../sdk/types"
 const readMeta = (selector: string, attr = "content") =>
     document.querySelector(selector)?.getAttribute(attr)?.trim() ?? ""
 
+const NOISE_SELECTORS = [
+  "script",
+  "style",
+  "noscript",
+  "svg",
+  "canvas",
+  "iframe",
+  "form",
+  "button",
+  "input",
+  "textarea",
+  "select",
+  "nav",
+  "aside",
+  "footer",
+  "header nav",
+  "[role='navigation']",
+  "[role='complementary']",
+  ".advertisement",
+  ".ads",
+  ".ad",
+  ".sidebar",
+  ".toc",
+  ".table-of-contents",
+  ".comments",
+  ".comment",
+  ".related",
+  ".recommend",
+  ".breadcrumb",
+  ".pager",
+  ".pagination"
+].join(", ")
+
 export const getCurrentSelectionText = () =>
   window.getSelection?.()?.toString().trim() ?? ""
 
@@ -20,45 +53,6 @@ export const createSnippet = (
   createdAt: new Date().toISOString()
 })
 
-export const getPageContext = (): PageContext => {
-    const title = document.title?.trim() || location.hostname
-    const description = readMeta('meta[name="description"]')
-    const author =
-    readMeta('meta[name="author"]') ||
-    readMeta('meta[property="article:author"]') ||
-    (document.querySelector('[itemprop="author"]')?.textContent?.trim() ?? "")
-  const siteName = readMeta('meta[property="og:site_name"]')
-  const publishedAt =
-    readMeta('meta[property="article:published_time"]') ||
-    readMeta('meta[name="publish-date"]') ||
-    readMeta('meta[name="date"]') ||
-    (document.querySelector("time")?.getAttribute("datetime")?.trim() ?? "")
-
-  const headings = Array.from(document.querySelectorAll("h1, h2, h3"))
-    .map((element) => element.textContent?.trim() ?? "")
-    .filter(Boolean)
-    .slice(0, 8)
-
-  const paragraphs = Array.from(document.querySelectorAll("p, article p, main p"))
-    .map((element) => element.textContent?.replace(/\s+/g, " ").trim() ?? "")
-    .filter((text) => text.length > 40)
-    .slice(0, 6)
-
-  return {
-    title,
-    url: location.href,
-    domain: location.hostname,
-    description,
-    author,
-    siteName,
-    publishedAt,
-    summary: [description, ...headings, ...paragraphs]
-      .filter(Boolean)
-      .join("\n")
-      .slice(0, 2200)
-  }
-}
-
 const normalizeText = (text: string) =>
   text
     .replace(/\u00a0/g, " ")
@@ -67,23 +61,60 @@ const normalizeText = (text: string) =>
     .replace(/[ \t]{2,}/g, " ")
     .trim()
 
+const uniqueTextBlocks = (items: string[]) => {
+  const seen = new Set<string>()
+
+  return items.filter((item) => {
+    const normalized = normalizeText(item)
+    if (!normalized || seen.has(normalized)) {
+      return false
+    }
+
+    seen.add(normalized)
+    return true
+  })
+}
+
+const sanitizeRoot = (root: Element) => {
+  const clone = root.cloneNode(true) as Element
+  clone.querySelectorAll(NOISE_SELECTORS).forEach((node) => node.remove())
+  return clone
+}
+
 const readTextBlocks = (root: ParentNode, selector: string) =>
-  Array.from(root.querySelectorAll(selector))
+  uniqueTextBlocks(
+    Array.from(root.querySelectorAll(selector))
     .map((element) => element.textContent?.replace(/\s+/g, " ").trim() ?? "")
     .filter((text) => text.length > 0)
+  )
+
+const textDensity = (element: Element) => {
+  const textLength = normalizeText(element.textContent ?? "").length
+  const htmlLength = element.innerHTML.length || 1
+  return textLength / htmlLength
+}
 
 const scoreArticleCandidate = (element: Element) => {
-  const text = normalizeText(element.textContent ?? "")
-  const paragraphs = readTextBlocks(element, "p")
-  const headings = readTextBlocks(element, "h1, h2, h3, h4")
+  const cleanRoot = sanitizeRoot(element)
+  const text = normalizeText(cleanRoot.textContent ?? "")
+  const paragraphs = readTextBlocks(cleanRoot, "p")
+  const headings = readTextBlocks(cleanRoot, "h1, h2, h3, h4")
+  const lists = readTextBlocks(cleanRoot, "li")
+  const density = textDensity(cleanRoot)
 
-  return text.length + paragraphs.length * 180 + headings.length * 80
+  return (
+    text.length +
+    paragraphs.length * 220 +
+    headings.length * 90 +
+    lists.length * 40 +
+    density * 400
+  )
 }
 
 const pickArticleRoot = () => {
   const candidates = Array.from(
     document.querySelectorAll(
-      "article, main article, main, [role='main'], .post, .article, .entry-content, .markdown-body"
+      "article, main article, main, [role='main'], .post, .article, .entry-content, .markdown-body, .content, .post-content, .article-content, .document, .docMainContainer"
     )
   )
 
@@ -98,22 +129,52 @@ const pickArticleRoot = () => {
 }
 
 export const getPageArticleText = () => {
-  const articleRoot = pickArticleRoot()
+  const articleRoot = sanitizeRoot(pickArticleRoot())
   const title = document.title?.trim() || location.hostname
   const blocks: string[] = []
 
-  const headings = readTextBlocks(articleRoot, "h1, h2, h3")
+  const headings = Array.from(articleRoot.querySelectorAll("h1, h2, h3"))
+    .map((element) => ({
+      level: Number(element.tagName.slice(1)),
+      text: element.textContent?.replace(/\s+/g, " ").trim() ?? ""
+    }))
+    .filter((item) => item.text.length > 0)
+
   if (headings.length > 0) {
-    blocks.push(...headings.map((heading, index) => `${"#".repeat(Math.min(index + 1, 3))} ${heading}`))
+    blocks.push(
+      ...uniqueTextBlocks(
+        headings.map(
+          (heading) => `${"#".repeat(Math.min(Math.max(heading.level, 1), 3))} ${heading.text}`
+        )
+      )
+    )
   }
 
-  const paragraphs = readTextBlocks(
-    articleRoot,
-    "p, li, blockquote, pre code, figcaption"
-  ).filter((text) => text.length >= 16)
+  const paragraphs = uniqueTextBlocks(
+    readTextBlocks(
+      articleRoot,
+      "p, li, blockquote, pre code, figcaption, td"
+    )
+  ).filter((text) => {
+    if (text.length < 24) {
+      return false
+    }
+
+    const lowered = text.toLowerCase()
+    return ![
+      "copyright",
+      "all rights reserved",
+      "上一篇",
+      "下一篇",
+      "相关阅读",
+      "相关推荐",
+      "登录",
+      "注册"
+    ].some((noise) => lowered.includes(noise))
+  })
 
   if (paragraphs.length > 0) {
-    blocks.push(...paragraphs)
+    blocks.push(...paragraphs.slice(0, 220))
   }
 
   const content = normalizeText(
@@ -121,6 +182,54 @@ export const getPageArticleText = () => {
   ).slice(0, 32000)
 
   return content
+}
+
+const buildSummaryBlocks = (root: Element) =>
+  uniqueTextBlocks(
+    readTextBlocks(
+      root,
+      "p, article p, main p, li, blockquote"
+    )
+  )
+    .filter((text) => text.length > 40)
+    .slice(0, 8)
+
+export const getPageContext = (): PageContext => {
+    const title = document.title?.trim() || location.hostname
+    const description = readMeta('meta[name="description"]')
+    const author =
+    readMeta('meta[name="author"]') ||
+    readMeta('meta[property="article:author"]') ||
+    (document.querySelector('[itemprop="author"]')?.textContent?.trim() ?? "")
+  const siteName = readMeta('meta[property="og:site_name"]')
+  const publishedAt =
+    readMeta('meta[property="article:published_time"]') ||
+    readMeta('meta[name="publish-date"]') ||
+    readMeta('meta[name="date"]') ||
+    (document.querySelector("time")?.getAttribute("datetime")?.trim() ?? "")
+
+  const articleRoot = sanitizeRoot(pickArticleRoot())
+  const headings = uniqueTextBlocks(
+    Array.from(articleRoot.querySelectorAll("h1, h2, h3"))
+      .map((element) => element.textContent?.trim() ?? "")
+      .filter(Boolean)
+  ).slice(0, 10)
+
+  const paragraphs = buildSummaryBlocks(articleRoot)
+
+  return {
+    title,
+    url: location.href,
+    domain: location.hostname,
+    description,
+    author,
+    siteName,
+    publishedAt,
+    summary: [description, ...headings, ...paragraphs]
+      .filter(Boolean)
+      .join("\n")
+      .slice(0, 2400)
+  }
 }
 
 export const cssPathFor = (element: Element) => {

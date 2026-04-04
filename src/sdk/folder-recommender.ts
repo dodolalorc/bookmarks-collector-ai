@@ -2,13 +2,39 @@ import type {
   BookmarkFolder,
   FolderIndex,
   FolderSuggestion,
+  RecommendationFeedbackEntry,
   RecommendationInput,
   RecommendationResult,
   SmartFavoritesSettings
 } from "~/src/sdk/types"
 import { titleCase, tokenize, topKeywords, unique } from "~/src/sdk/text"
 
-function scoreFolder(folder: BookmarkFolder, tokens: string[], domain: string) {
+function scoreFeedback(
+  folder: BookmarkFolder,
+  tokens: string[],
+  domain: string,
+  feedbackEntries: RecommendationFeedbackEntry[]
+) {
+  return feedbackEntries
+    .filter((entry) => entry.folderPath === folder.path)
+    .reduce((score, entry, index) => {
+      const overlap = entry.tokens.filter((token) => tokens.includes(token)).length
+      const recencyBonus = Math.max(1, 6 - index)
+      const domainBonus =
+        domain && entry.domain && domain.toLowerCase() === entry.domain.toLowerCase()
+          ? 10
+          : 0
+
+      return score + domainBonus + Math.min(overlap * 2, 12) + recencyBonus
+    }, 0)
+}
+
+function scoreFolder(
+  folder: BookmarkFolder,
+  tokens: string[],
+  domain: string,
+  feedbackEntries: RecommendationFeedbackEntry[]
+) {
   let score = 0
   const folderTokens = tokenize(`${folder.title} ${folder.path}`)
   const sampleTokens = tokenize(folder.sampleTitles.join(" "))
@@ -31,7 +57,7 @@ function scoreFolder(folder: BookmarkFolder, tokens: string[], domain: string) {
     score += 2
   }
 
-  return score
+  return score + scoreFeedback(folder, tokens, domain, feedbackEntries)
 }
 
 function buildCreateSuggestion(
@@ -70,7 +96,8 @@ function buildCreateSuggestion(
 export function recommendFolders(
   input: RecommendationInput,
   folderIndex: FolderIndex,
-  settings: SmartFavoritesSettings
+  settings: SmartFavoritesSettings,
+  feedbackEntries: RecommendationFeedbackEntry[] = []
 ): RecommendationResult {
   const tokens = unique(
     tokenize(
@@ -90,7 +117,7 @@ export function recommendFolders(
   const ranked = folderIndex.folders
     .map((folder) => ({
       folder,
-      score: scoreFolder(folder, tokens, input.page.domain)
+      score: scoreFolder(folder, tokens, input.page.domain, feedbackEntries)
     }))
     .filter((item) => item.score > 0)
     .sort((left, right) => right.score - left.score)

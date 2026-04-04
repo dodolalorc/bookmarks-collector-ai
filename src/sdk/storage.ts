@@ -3,11 +3,16 @@ import {
   DEFAULT_SETTINGS,
   STORAGE_KEYS
 } from "~/src/sdk/constants"
+import { tokenize, unique } from "~/src/sdk/text"
 import type {
   AiModelProfile,
   CapturedSnippet,
+  ExportSnapshot,
+  ImportSnapshotResult,
   KnowledgeRecord,
   PageCaptureDraft,
+  RecommendationFeedbackEntry,
+  RecommendationInput,
   SnippetCollectionFolder,
   SnippetCollectionItem,
   SnippetCollectionState,
@@ -173,6 +178,47 @@ export async function saveSettings(settings: SmartFavoritesSettings) {
   await chrome.storage.local.set({
     [STORAGE_KEYS.settings]: normalized
   })
+}
+
+export async function importSnapshotData(
+  snapshot: ExportSnapshot
+): Promise<ImportSnapshotResult> {
+  const normalizedSettings = {
+    ...snapshot.settings,
+    ...normalizeProviders(snapshot.settings)
+  }
+  const knowledge = Array.isArray(snapshot.knowledge)
+    ? snapshot.knowledge.slice(0, 300)
+    : []
+  const drafts = Array.isArray(snapshot.drafts) ? snapshot.drafts : []
+  const draftMap = Object.fromEntries(
+    drafts
+      .filter((draft) => typeof draft?.url === "string" && draft.url.trim())
+      .map((draft) => [
+        draft.url,
+        {
+          url: draft.url,
+          snippets: Array.isArray(draft.snippets) ? draft.snippets : [],
+          updatedAt: draft.updatedAt || new Date().toISOString()
+        }
+      ])
+  )
+  const collections = normalizeCollections(snapshot.collections)
+
+  await chrome.storage.local.set({
+    [STORAGE_KEYS.settings]: normalizedSettings,
+    [STORAGE_KEYS.knowledge]: knowledge,
+    [STORAGE_KEYS.drafts]: draftMap,
+    [STORAGE_KEYS.collections]: collections
+  })
+
+  return {
+    settingsImported: true,
+    knowledgeCount: knowledge.length,
+    draftCount: Object.keys(draftMap).length,
+    collectionFolderCount: collections.folders.length,
+    collectionItemCount: collections.items.length
+  }
 }
 
 export async function getKnowledgeRecords(): Promise<KnowledgeRecord[]> {
@@ -346,6 +392,48 @@ export async function pushKnowledgeRecord(record: KnowledgeRecord) {
   const next = [record, ...current].slice(0, 300)
   await chrome.storage.local.set({
     [STORAGE_KEYS.knowledge]: next
+  })
+}
+
+export async function getRecommendationFeedback(): Promise<
+  RecommendationFeedbackEntry[]
+> {
+  return getLocal<RecommendationFeedbackEntry[]>(
+    STORAGE_KEYS.recommendationFeedback,
+    []
+  )
+}
+
+export async function pushRecommendationFeedback(
+  input: RecommendationInput,
+  folderPath: string
+) {
+  const tokens = unique(
+    tokenize(
+      [
+        input.page.title,
+        input.page.domain,
+        input.page.summary,
+        input.selectedText,
+        input.notes,
+        input.tags.join(" ")
+      ]
+        .filter(Boolean)
+        .join(" ")
+    )
+  ).slice(0, 16)
+
+  const entry: RecommendationFeedbackEntry = {
+    folderPath,
+    domain: input.page.domain,
+    tokens,
+    createdAt: new Date().toISOString()
+  }
+
+  const current = await getRecommendationFeedback()
+  const next = [entry, ...current].slice(0, 300)
+  await chrome.storage.local.set({
+    [STORAGE_KEYS.recommendationFeedback]: next
   })
 }
 

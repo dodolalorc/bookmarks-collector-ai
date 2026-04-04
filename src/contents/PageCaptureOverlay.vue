@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { computed } from "vue"
 
 import type { AiModelProfile, CapturedSnippet } from "../sdk/types"
@@ -9,10 +9,13 @@ type OverlayStateView = {
     snippets: CapturedSnippet[]
   }
   sidebarOpen: boolean
-  aiPanelOpen: boolean
+  sidebarWidth: number
+  aiDialogOpen: boolean
   elementPickMode: boolean
   status: string
   aiStatus: string
+  aiConfigNotice: string
+  aiConfigured: boolean
   bookmarkPromptVisible: boolean
   selectionText: string
   articleTitle: string
@@ -36,13 +39,14 @@ type OverlayStateView = {
 }
 
 const props = defineProps<{
-  sidebarWidth: number
   state: OverlayStateView
 }>()
 
 const emit = defineEmits<{
   toggleSidebar: []
-  toggleAiPanel: []
+  toggleAiDialog: []
+  closeAiDialog: []
+  startSidebarResize: [event: MouseEvent]
   captureSelection: []
   toggleElementMode: []
   deleteSnippet: [snippetId: string]
@@ -51,6 +55,7 @@ const emit = defineEmits<{
   reanalyzeAllSnippets: []
   openOptions: []
   openHistory: []
+  openQuickStart: []
   openGithub: []
   refreshArticle: []
   updateArticleMeta: [
@@ -71,43 +76,23 @@ const emit = defineEmits<{
   hideSelectionPrompt: []
 }>()
 
-const AI_PANEL_WIDTH = 560
 const FLOATING_BALL_TOP = 84
 const FLOATING_BALL_GAP = 14
-const FLOATING_BALL_SIZE = 34
+const FLOATING_BALL_SIZE = 38
 
-const sidebarTransform = computed(() =>
-  props.state.sidebarOpen ? "translateX(0)" : "translateX(100%)"
+const pageEdgeOffset = computed(() =>
+  props.state.sidebarOpen ? props.state.sidebarWidth + 20 : 20
 )
 
-const aiPanelTransform = computed(() =>
-  props.state.aiPanelOpen ? "translateX(0)" : "translateX(100%)"
-)
-
-const aiPanelRight = computed(() =>
-  props.state.sidebarOpen ? `${props.sidebarWidth}px` : "0px"
-)
-
-const sidebarOffset = computed(() =>
-  props.state.sidebarOpen ? props.sidebarWidth + 24 : 20
-)
-
-const aiOffset = computed(() => {
-  const base = props.state.aiPanelOpen ? AI_PANEL_WIDTH + 24 : 20
-  return base + (props.state.sidebarOpen ? props.sidebarWidth + 12 : 0)
-})
-
-const promptRight = computed(() =>
-  props.state.sidebarOpen ? `${props.sidebarWidth + 72}px` : "72px"
-)
+const promptRight = computed(() => `${pageEdgeOffset.value + 52}px`)
 
 const sidebarBallStyle = computed(() => ({
-  right: `${sidebarOffset.value}px`,
+  right: `${pageEdgeOffset.value}px`,
   top: `${FLOATING_BALL_TOP}px`
 }))
 
 const aiBallStyle = computed(() => ({
-  right: `${aiOffset.value}px`,
+  right: `${pageEdgeOffset.value}px`,
   top: `${FLOATING_BALL_TOP + FLOATING_BALL_SIZE + FLOATING_BALL_GAP}px`
 }))
 
@@ -123,7 +108,7 @@ const selectionDotStyle = computed(() => ({
 
 const aiMetaSummary = computed(() => [
   { label: "字符", value: props.state.aiCharCount.toLocaleString() },
-  { label: "预算 Token", value: props.state.aiTokenEstimate.toLocaleString() },
+  { label: "预估 Token", value: props.state.aiTokenEstimate.toLocaleString() },
   { label: "模型", value: props.state.aiModelLabel || "未配置模型" }
 ])
 
@@ -161,12 +146,12 @@ const onModelChange = (event: Event) => {
       v-if="state.bookmarkPromptVisible"
       class="prompt"
       :style="{ right: promptRight }">
-      <div class="prompt-title">已检测到你收藏了当前页面</div>
-      <div class="prompt-text">要不要现在整理标签并补充当前页的小知识点？</div>
+      <div class="prompt-title">检测到你收藏了当前页面</div>
+      <div class="prompt-text">要不要现在整理标签，并补充当前页面里的知识片段？</div>
       <div class="prompt-actions">
         <button class="chip chip-gradient" @click="emit('classifyNow')">
           <font-awesome-icon icon="bolt" />
-          立即分类标签
+          立即处理
         </button>
         <button class="chip" @click="emit('dismissBookmarkPrompt')">
           <font-awesome-icon icon="clock" />
@@ -181,17 +166,15 @@ const onModelChange = (event: Event) => {
       :style="selectionDotStyle"
       @mouseenter="emit('showSelectionPrompt')"
       @mouseleave="emit('hideSelectionPrompt')">
-      <button class="selection-anchor" title="将这段内容加入当前框选内容">
+      <button class="selection-anchor" title="将选中文本加入当前知识片段">
         <span class="selection-anchor-core"></span>
       </button>
       <div
         v-if="state.selectionAnchorHovered"
         class="selection-anchor-pop"
         :style="selectionPromptStyle">
-        <div class="selection-anchor-title">加入当前框选内容</div>
-        <div class="selection-anchor-copy">
-          当前只会出现在选中内容最后一个词的右下角。
-        </div>
+        <div class="selection-anchor-title">加入当前抓取面板</div>
+        <div class="selection-anchor-copy">选中文本后，这个按钮会出现在选择区域末尾，方便直接加入当前页面草稿。</div>
         <button class="chip chip-gradient" @click="emit('captureSelection')">
           <font-awesome-icon icon="highlighter" />
           选择加入
@@ -202,34 +185,41 @@ const onModelChange = (event: Event) => {
     <button
       class="floating-ball"
       :style="sidebarBallStyle"
-      title="切换页面知识侧边栏"
-      @click="emit('toggleSidebar')">
+      title="打开页面知识抓取面板"
+      @click.stop="emit('toggleSidebar')">
       <font-awesome-icon icon="wand-magic-sparkles" />
     </button>
 
     <button
       class="floating-ball floating-ball-ai"
       :style="aiBallStyle"
-      title="打开页面 AI 整理面板"
-      @click="emit('toggleAiPanel')">
+      title="打开 AI 页面整理弹窗"
+      @click.stop="emit('toggleAiDialog')">
       <font-awesome-icon icon="brain" />
     </button>
 
     <aside
-      class="sidebar"
-      :style="{ width: `${sidebarWidth}px`, transform: sidebarTransform }">
+      class="page-sidebar"
+      :class="{ open: state.sidebarOpen }"
+      :style="{ width: `${state.sidebarWidth}px` }">
+      <button
+        class="resize-handle"
+        title="拖动调整宽度"
+        @mousedown.prevent="emit('startSidebarResize', $event)" />
+
       <div class="sidebar-head">
         <div class="sidebar-title-wrap">
-          <div class="sidebar-eyebrow">Current Bookmark</div>
+          <div class="sidebar-eyebrow">Page Capture</div>
           <div class="sidebar-title">页面知识抓取</div>
           <div class="sidebar-subtitle">
-            统一收集当前书签页下的小知识点，不做分类拆分。
+            这里像浏览器侧边工具一样嵌入页面右侧。打开后会为页面预留宽度，避免直接遮挡正文。
           </div>
         </div>
         <button class="icon-button" @click="emit('toggleSidebar')">
           <font-awesome-icon icon="xmark" />
         </button>
       </div>
+
       <div class="sidebar-status">{{ state.status }}</div>
 
       <div class="toolbar">
@@ -260,7 +250,7 @@ const onModelChange = (event: Event) => {
 
       <div class="snippet-list">
         <div v-if="state.draft.snippets.length === 0" class="empty-state">
-          这里会展示当前书签页提取出的多个小知识点。你可以先选中文字直接加入，也可以开启框选模式点击页面区域。
+          这里会展示当前页面抓取到的知识片段。你可以先选中文本直接加入，也可以开启框选模式抓取页面某个区域。
         </div>
         <OverlaySnippetCard
           v-for="snippet in state.draft.snippets"
@@ -271,12 +261,15 @@ const onModelChange = (event: Event) => {
       </div>
 
       <div class="sidebar-footer">
-        <div class="footer-text">模型配置和书签整理保留在管理页中</div>
+        <div class="footer-text">模型配置、历史整理和快速开始都在管理页里</div>
         <div class="footer-actions">
+          <button class="icon-button" title="快速开始" @click="emit('openQuickStart')">
+            <font-awesome-icon icon="book-open" />
+          </button>
           <button class="icon-button" title="模型配置" @click="emit('openOptions')">
             <font-awesome-icon icon="gear" />
           </button>
-          <button class="icon-button" title="书签整理" @click="emit('openHistory')">
+          <button class="icon-button" title="历史整理" @click="emit('openHistory')">
             <font-awesome-icon icon="bookmark" />
           </button>
           <button class="icon-button" title="GitHub" @click="emit('openGithub')">
@@ -286,19 +279,21 @@ const onModelChange = (event: Event) => {
       </div>
     </aside>
 
-    <aside
-      class="ai-panel"
-      :style="{
-        width: `${AI_PANEL_WIDTH}px`,
-        transform: aiPanelTransform,
-        right: aiPanelRight
-      }">
+    <div
+      v-if="state.aiDialogOpen"
+      class="ai-dialog-backdrop"
+      @click="emit('closeAiDialog')" />
+
+    <section
+      v-if="state.aiDialogOpen"
+      class="ai-dialog"
+      @click.stop>
       <div class="ai-panel-head">
         <div>
           <div class="sidebar-eyebrow">Page Digest</div>
           <div class="sidebar-title">AI 页面整理</div>
           <div class="sidebar-subtitle">
-            把当前网页当作博客文章处理，抽取成可继续编辑和投喂模型的结构化文本。
+            这里改成独立弹窗，不再和页面知识抓取共用侧边抽屉。适合集中整理当前页面内容。
           </div>
         </div>
         <div class="panel-actions">
@@ -308,7 +303,7 @@ const onModelChange = (event: Event) => {
           <button class="icon-button" title="模型配置" @click="emit('openOptions')">
             <font-awesome-icon icon="gear" />
           </button>
-          <button class="icon-button" title="关闭面板" @click="emit('toggleAiPanel')">
+          <button class="icon-button" title="关闭弹窗" @click="emit('closeAiDialog')">
             <font-awesome-icon icon="xmark" />
           </button>
         </div>
@@ -316,6 +311,10 @@ const onModelChange = (event: Event) => {
 
       <div class="ai-panel-body">
         <div class="sidebar-status">{{ state.aiStatus }}</div>
+
+        <div v-if="state.aiConfigNotice" class="config-notice">
+          {{ state.aiConfigNotice }}
+        </div>
 
         <div class="meta-grid">
           <label class="field-wrap">
@@ -355,11 +354,11 @@ const onModelChange = (event: Event) => {
         </div>
 
         <div class="field-wrap">
-          <span class="field-label">AI 提示词</span>
+          <span class="field-label">AI 提示语</span>
           <textarea
             class="field textarea-prompt"
             :value="state.aiPrompt"
-            placeholder="补充你想让 AI 用什么视角来整理，例如：保留关键论点并输出成技术笔记。"
+            placeholder="补充你希望 AI 以什么视角整理页面，例如：保留关键论点并输出成技术笔记。"
             @input="onTextInput('prompt')" />
         </div>
 
@@ -380,21 +379,25 @@ const onModelChange = (event: Event) => {
           </label>
 
           <div class="bar-actions">
+            <button class="chip" @click="emit('openQuickStart')">
+              <font-awesome-icon icon="book-open" />
+              快速开始
+            </button>
             <button class="chip" @click="emit('openOptions')">
               <font-awesome-icon icon="gear" />
               模型配置
             </button>
             <button
               class="chip chip-gradient"
-              :disabled="state.aiRunning"
+              :disabled="state.aiRunning || !state.aiConfigured"
               @click="emit('summarizeArticle')">
               <font-awesome-icon icon="robot" />
-              {{ state.aiRunning ? "整理中…" : "一键总结" }}
+              {{ state.aiRunning ? "整理中" : "一键总结" }}
             </button>
           </div>
         </div>
       </div>
-    </aside>
+    </section>
   </div>
 </template>
 
@@ -406,26 +409,13 @@ const onModelChange = (event: Event) => {
   pointer-events: none;
   z-index: 2147483646;
   font-family: var(--sf-font-family);
-  font-size: var(--sf-font-size-md);
-}
-
-.overlay-root,
-.overlay-root * {
-  box-sizing: border-box;
-}
-
-.overlay-root button,
-.overlay-root input,
-.overlay-root textarea,
-.overlay-root select {
-  font: inherit;
 }
 
 .prompt {
   position: fixed;
   top: 86px;
   pointer-events: auto;
-  max-width: 240px;
+  max-width: 260px;
   border-radius: var(--sf-radius-lg);
   padding: var(--sf-space-3) var(--sf-space-3) var(--sf-space-2);
   background: linear-gradient(135deg, #fff9ff 0%, #f4fbff 55%, #edf8ff 100%);
@@ -454,12 +444,14 @@ const onModelChange = (event: Event) => {
   display: flex;
   gap: var(--sf-space-2);
   align-items: center;
+  flex-wrap: wrap;
 }
 
 .floating-ball {
-  --ball-size: 34px;
+  --ball-size: 38px;
   position: fixed;
   pointer-events: auto;
+  z-index: 2147483647;
   width: var(--ball-size);
   height: var(--ball-size);
   display: inline-flex;
@@ -512,7 +504,7 @@ const onModelChange = (event: Event) => {
 
 .selection-anchor-pop {
   position: absolute;
-  width: 180px;
+  width: 200px;
   border-radius: 16px;
   padding: 12px;
   background: linear-gradient(180deg, #fff8ff 0%, #f4fbff 100%);
@@ -533,14 +525,14 @@ const onModelChange = (event: Event) => {
   color: #6d7994;
 }
 
-.sidebar,
-.ai-panel {
+.page-sidebar {
   position: fixed;
-  right: 0;
   top: 0;
+  right: 0;
   bottom: 0;
-  pointer-events: auto;
+  transform: translateX(100%);
   transition: transform 220ms ease;
+  pointer-events: auto;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -555,14 +547,32 @@ const onModelChange = (event: Event) => {
   backdrop-filter: blur(18px);
 }
 
-.ai-panel {
-  right: 0;
-  background: linear-gradient(
-    180deg,
-    rgba(255, 251, 240, 0.99) 0%,
-    rgba(255, 246, 231, 0.99) 36%,
-    rgba(247, 251, 255, 0.99) 100%
-  );
+.page-sidebar.open {
+  transform: translateX(0);
+}
+
+.resize-handle {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 10px;
+  margin-left: -5px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: ew-resize;
+}
+
+.resize-handle::before {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 24px;
+  bottom: 24px;
+  width: 2px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(108, 149, 255, 0.08), rgba(108, 149, 255, 0.48), rgba(108, 149, 255, 0.08));
 }
 
 .sidebar-head,
@@ -723,6 +733,45 @@ const onModelChange = (event: Event) => {
   color: #8591ac;
 }
 
+.ai-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  pointer-events: auto;
+  background: rgba(37, 50, 77, 0.24);
+  backdrop-filter: blur(4px);
+}
+
+.ai-dialog {
+  position: fixed;
+  top: 48px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(820px, calc(100vw - 64px));
+  max-height: calc(100vh - 96px);
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 28px;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 251, 240, 0.99) 0%,
+    rgba(255, 246, 231, 0.99) 36%,
+    rgba(247, 251, 255, 0.99) 100%
+  );
+  border: 1px solid rgba(236, 203, 120, 0.22);
+  box-shadow: 0 30px 80px rgba(75, 105, 150, 0.26);
+}
+
+.config-notice {
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: rgba(255, 248, 228, 0.88);
+  border: 1px solid rgba(232, 188, 92, 0.26);
+  color: #7a5a18;
+  line-height: 1.7;
+}
+
 .meta-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -771,6 +820,7 @@ const onModelChange = (event: Event) => {
   border: 1px solid rgba(147, 168, 197, 0.44);
   background: rgba(255, 255, 255, 0.82);
   color: #20304c;
+  box-sizing: border-box;
 }
 
 .textarea-large {
@@ -816,6 +866,12 @@ const onModelChange = (event: Event) => {
 @media (max-width: 860px) {
   .meta-grid {
     grid-template-columns: 1fr;
+  }
+
+  .ai-dialog {
+    top: 16px;
+    width: calc(100vw - 24px);
+    max-height: calc(100vh - 32px);
   }
 }
 </style>

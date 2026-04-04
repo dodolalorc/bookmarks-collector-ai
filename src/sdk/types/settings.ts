@@ -51,3 +51,11 @@ export interface ExportSnapshot {
   drafts: PageCaptureDraft[]
   collections: SnippetCollectionState
 }
+
+export interface ImportSnapshotResult {
+  settingsImported: boolean
+  knowledgeCount: number
+  draftCount: number
+  collectionFolderCount: number
+  collectionItemCount: number
+}

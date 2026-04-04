@@ -20,9 +20,13 @@ import {
   deleteSnippetCollectionItem,
   deleteSnippetFolder,
   getCaptureDraft,
+  getKnowledgeRecords,
+  getRecommendationFeedback,
   getSnippetCollections,
   getSettings,
+  importSnapshotData,
   moveSnippetCollectionItem,
+  pushRecommendationFeedback,
   pushKnowledgeRecord,
   removeCapturedSnippet,
   saveSettings,
@@ -46,6 +50,7 @@ import type {
   ExportSnapshot,
   HistoryRecommendationItem,
   HistoryRecommendationRequest,
+  ImportSnapshotResult,
   MoveCollectionItemPayload,
   PageDigestRequest,
   PageCaptureDraft,
@@ -94,6 +99,8 @@ async function handleMessage(message: { type: string; payload?: unknown }) {
       return handleApplyBookmark(message.payload as ApplyBookmarkPayload)
     case "bookmarks-collector/export-snapshot":
       return handleExport()
+    case "bookmarks-collector/import-snapshot":
+      return handleImportSnapshot(message.payload as ExportSnapshot)
     case "bookmarks-collector/get-capture-draft":
       return getCaptureDraft(message.payload as string)
     case "bookmarks-collector/add-captured-snippet":
@@ -137,6 +144,8 @@ async function handleMessage(message: { type: string; payload?: unknown }) {
       return handleOpenExtensionPage(message.payload as ExtensionPageOpenPayload)
     case "bookmarks-collector/get-snippet-collections":
       return getSnippetCollections()
+    case "bookmarks-collector/get-knowledge-records":
+      return getKnowledgeRecords()
     case "bookmarks-collector/create-snippet-folder":
       return handleCreateSnippetFolder(message.payload as CreateCollectionFolderPayload)
     case "bookmarks-collector/update-snippet-folder":
@@ -159,12 +168,18 @@ async function handleMessage(message: { type: string; payload?: unknown }) {
 async function handleRecommendation(
   input: RecommendationInput
 ): Promise<RecommendationResult> {
-  const [settings, folderIndex] = await Promise.all([
+  const [settings, folderIndex, feedbackEntries] = await Promise.all([
     getSettings(),
-    buildFolderIndex()
+    buildFolderIndex(),
+    getRecommendationFeedback()
   ])
 
-  const baseRecommendation = recommendFolders(input, folderIndex, settings)
+  const baseRecommendation = recommendFolders(
+    input,
+    folderIndex,
+    settings,
+    feedbackEntries
+  )
   const activeProvider =
     settings.providers.find((provider) => provider.id === settings.activeProviderId) ??
     settings.providers[0]
@@ -227,6 +242,8 @@ async function handleApplyBookmark(payload: ApplyBookmarkPayload) {
   const result = await applyBookmarkDecision(payload)
   const settings = await getSettings()
 
+  await pushRecommendationFeedback(payload.input, result.folderPath)
+
   if (settings.behavior.storeKnowledge) {
     await pushKnowledgeRecord({
       createdAt: new Date().toISOString(),
@@ -252,6 +269,12 @@ async function handleExport(): Promise<ExportSnapshot> {
   return buildExportSnapshot(settings, folderIndex)
 }
 
+async function handleImportSnapshot(
+  snapshot: ExportSnapshot
+): Promise<ImportSnapshotResult> {
+  return importSnapshotData(snapshot)
+}
+
 async function handleAddCapturedSnippet(payload: {
   url: string
   snippet: CapturedSnippet
@@ -269,10 +292,11 @@ async function handleRemoveCapturedSnippet(payload: {
 async function handleListHistoryBookmarks(
   request?: HistoryRecommendationRequest
 ): Promise<HistoryRecommendationItem[]> {
-  const [bookmarks, folderIndex, settings] = await Promise.all([
+  const [bookmarks, folderIndex, settings, feedbackEntries] = await Promise.all([
     listBookmarks(request?.limit ?? 40),
     buildFolderIndex(),
-    getSettings()
+    getSettings(),
+    getRecommendationFeedback()
   ])
 
   const selectedBookmarks = request?.bookmarkIds?.length
@@ -293,7 +317,8 @@ async function handleListHistoryBookmarks(
         notes: bookmark.parentPath
       },
       folderIndex,
-      settings
+      settings,
+      feedbackEntries
     )
   }))
 }

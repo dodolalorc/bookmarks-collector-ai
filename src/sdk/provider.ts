@@ -44,6 +44,39 @@ function hasProviderConfig(provider: Pick<AiModelProfile, "apiKey" | "baseUrl" |
   return Boolean(provider.apiKey && provider.baseUrl && provider.model)
 }
 
+function getMissingProviderConfigFields(
+  provider: Pick<AiModelProfile, "apiKey" | "baseUrl" | "model">
+) {
+  const missing: string[] = []
+
+  if (!provider.apiKey?.trim()) {
+    missing.push("API Key")
+  }
+
+  if (!provider.model?.trim()) {
+    missing.push("模型")
+  }
+
+  if (!provider.baseUrl?.trim()) {
+    missing.push("Base URL")
+  }
+
+  return missing
+}
+
+function getProviderConfigNotice(
+  provider: Pick<AiModelProfile, "apiKey" | "baseUrl" | "model">,
+  destination = "插件管理页 > 模型配置"
+) {
+  const missing = getMissingProviderConfigFields(provider)
+
+  if (missing.length === 0) {
+    return ""
+  }
+
+  return `尚未配置${missing.join("、")}，请前往${destination}进行配置。`
+}
+
 function renderTemplate(
   template: string,
   input: RecommendationInput,
@@ -383,4 +416,10 @@ export async function summarizePageContent(
   }
 }
 
-export { estimateTokens, resolveProvider, hasProviderConfig }
+export {
+  estimateTokens,
+  resolveProvider,
+  hasProviderConfig,
+  getMissingProviderConfigFields,
+  getProviderConfigNotice
+}
