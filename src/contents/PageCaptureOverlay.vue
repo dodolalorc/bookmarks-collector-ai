@@ -72,6 +72,9 @@ const emit = defineEmits<{
 }>()
 
 const AI_PANEL_WIDTH = 560
+const FLOATING_BALL_TOP = 84
+const FLOATING_BALL_GAP = 14
+const FLOATING_BALL_SIZE = 34
 
 const sidebarTransform = computed(() =>
   props.state.sidebarOpen ? "translateX(0)" : "translateX(100%)"
@@ -97,6 +100,16 @@ const aiOffset = computed(() => {
 const promptRight = computed(() =>
   props.state.sidebarOpen ? `${props.sidebarWidth + 72}px` : "72px"
 )
+
+const sidebarBallStyle = computed(() => ({
+  right: `${sidebarOffset.value}px`,
+  top: `${FLOATING_BALL_TOP}px`
+}))
+
+const aiBallStyle = computed(() => ({
+  right: `${aiOffset.value}px`,
+  top: `${FLOATING_BALL_TOP + FLOATING_BALL_SIZE + FLOATING_BALL_GAP}px`
+}))
 
 const selectionPromptStyle = computed(() => ({
   top: `${props.state.selectionAnchor.top + 22}px`,
@@ -188,7 +201,7 @@ const onModelChange = (event: Event) => {
 
     <button
       class="floating-ball"
-      :style="{ right: `${sidebarOffset}px` }"
+      :style="sidebarBallStyle"
       title="切换页面知识侧边栏"
       @click="emit('toggleSidebar')">
       <font-awesome-icon icon="wand-magic-sparkles" />
@@ -196,7 +209,7 @@ const onModelChange = (event: Event) => {
 
     <button
       class="floating-ball floating-ball-ai"
-      :style="{ right: `${aiOffset}px` }"
+      :style="aiBallStyle"
       title="打开页面 AI 整理面板"
       @click="emit('toggleAiPanel')">
       <font-awesome-icon icon="brain" />
@@ -446,7 +459,6 @@ const onModelChange = (event: Event) => {
 .floating-ball {
   --ball-size: 34px;
   position: fixed;
-  top: 84px;
   pointer-events: auto;
   width: var(--ball-size);
   height: var(--ball-size);
