@@ -7,8 +7,10 @@ import type {
   PageContext,
   PageDigestRequest,
   PageDigestResult,
+  PageDigestSegment,
   RecommendationInput,
   RecommendationResult,
+  SegmentSelectionResult,
   SmartFavoritesSettings
 } from "~/src/sdk/types"
 
@@ -337,9 +339,21 @@ function buildDigestPrompt(page: PageContext, content: string, prompt?: string) 
     )
 }
 
+function buildSegmentDigestContent(segments: PageDigestSegment[]) {
+  return segments
+    .filter((segment) => segment.selected)
+    .sort((left, right) => left.order - right.order)
+    .map((segment, index) => `[段落 ${index + 1}]\n${segment.text}`)
+    .join("\n\n")
+}
+
 function buildHeuristicDigest(payload: PageDigestRequest): string {
   const page = payload.page
-  const normalizedContent = payload.content
+  const sourceContent =
+    payload.mode === "segments" && payload.segments?.length
+      ? buildSegmentDigestContent(payload.segments)
+      : payload.content
+  const normalizedContent = sourceContent
     .replace(/\n{3,}/g, "\n\n")
     .trim()
     .slice(0, 12000)
@@ -369,6 +383,10 @@ export async function summarizePageContent(
   settings: SmartFavoritesSettings
 ): Promise<PageDigestResult> {
   const provider = resolveProvider(settings, payload.providerId)
+  const digestContent =
+    payload.mode === "segments" && payload.segments?.length
+      ? buildSegmentDigestContent(payload.segments)
+      : payload.content
   const fallback = buildHeuristicDigest(payload)
 
   if (!hasProviderConfig(provider)) {
@@ -394,7 +412,7 @@ export async function summarizePageContent(
         },
         {
           role: "user",
-          content: buildDigestPrompt(payload.page, payload.content, payload.prompt)
+          content: buildDigestPrompt(payload.page, digestContent, payload.prompt)
         }
       ]
     })
@@ -413,6 +431,146 @@ export async function summarizePageContent(
       content: fallback,
       tokenEstimate: estimateTokens(fallback)
     }
+  }
+}
+
+const segmentSelectionSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["selectedSegmentIds", "reasons"],
+  properties: {
+    selectedSegmentIds: {
+      type: "array",
+      items: {
+        type: "string"
+      }
+    },
+    reasons: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["segmentId", "reason"],
+        properties: {
+          segmentId: {
+            type: "string"
+          },
+          reason: {
+            type: "string"
+          }
+        }
+      }
+    }
+  }
+} as const
+
+function heuristicSelectSegments(segments: PageDigestSegment[]): SegmentSelectionResult {
+  const selectedSegmentIds = segments
+    .filter((segment) => {
+      const text = segment.text.toLowerCase()
+      return ![
+        "advertisement",
+        "sponsor",
+        "推广",
+        "广告",
+        "相关阅读",
+        "推荐阅读",
+        "更多精彩",
+        "扫码",
+        "点击购买",
+        "限时优惠"
+      ].some((noise) => text.includes(noise))
+    })
+    .map((segment) => segment.id)
+
+  return {
+    modelLabel: "Heuristic",
+    providerId: "",
+    selectedSegmentIds,
+    reasons: segments.map((segment) => ({
+      segmentId: segment.id,
+      reason: selectedSegmentIds.includes(segment.id)
+        ? "保留为正文相关段落。"
+        : "疑似广告、导流或与正文弱相关内容。"
+    }))
+  }
+}
+
+export async function selectRelevantSegments(
+  segments: PageDigestSegment[],
+  settings: SmartFavoritesSettings,
+  providerId?: string
+): Promise<SegmentSelectionResult> {
+  const provider = resolveProvider(settings, providerId)
+
+  if (!hasProviderConfig(provider)) {
+    return heuristicSelectSegments(segments)
+  }
+
+  try {
+    const result = await generateText({
+      apiKey: provider.apiKey,
+      baseURL: provider.baseUrl,
+      model: provider.model,
+      temperature: 0.2,
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "segment_selection",
+          strict: true,
+          schema: segmentSelectionSchema
+        }
+      },
+      messages: [
+        {
+          role: "system",
+          content:
+            "你是网页正文清洗助手。请从段落列表中保留与文章主线强相关的正文，剔除广告、导流、版权尾注、无关推荐、重复说明等内容。输出 JSON。"
+        },
+        {
+          role: "user",
+          content: segments
+            .map(
+              (segment, index) =>
+                `[${segment.id}] 段落 ${index + 1}\n${segment.text.slice(0, 1800)}`
+            )
+            .join("\n\n")
+        }
+      ]
+    })
+
+    const parsed = parseJsonResponse(result.text || "") as {
+      selectedSegmentIds?: string[]
+      reasons?: Array<{
+        segmentId?: string
+        reason?: string
+      }>
+    }
+
+    const selectedSegmentIds = (parsed.selectedSegmentIds ?? []).filter((segmentId) =>
+      segments.some((segment) => segment.id === segmentId)
+    )
+
+    if (selectedSegmentIds.length === 0) {
+      return heuristicSelectSegments(segments)
+    }
+
+    return {
+      modelLabel: provider.label || provider.model,
+      providerId: provider.id,
+      selectedSegmentIds,
+      reasons: (parsed.reasons ?? [])
+        .filter(
+          (item): item is { segmentId: string; reason: string } =>
+            Boolean(item.segmentId && item.reason)
+        )
+        .map((item) => ({
+          segmentId: item.segmentId,
+          reason: item.reason
+        }))
+    }
+  } catch {
+    return heuristicSelectSegments(segments)
   }
 }
 

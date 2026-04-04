@@ -41,6 +41,8 @@ export interface ExtensionPageOpenPayload {
 export interface PageDigestRequest {
   page: PageContext
   content: string
+  mode?: "full" | "segments"
+  segments?: PageDigestSegment[]
   prompt?: string
   providerId?: string
 }
@@ -50,4 +52,22 @@ export interface PageDigestResult {
   providerId: string
   content: string
   tokenEstimate: number
+}
+
+export interface PageDigestSegment {
+  id: string
+  text: string
+  selected: boolean
+  order: number
+  reason?: string
+}
+
+export interface SegmentSelectionResult {
+  modelLabel: string
+  providerId: string
+  selectedSegmentIds: string[]
+  reasons: Array<{
+    segmentId: string
+    reason: string
+  }>
 }

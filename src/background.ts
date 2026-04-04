@@ -10,6 +10,7 @@ import {
   analyzeSnippetContent,
   extractAiRecommendations,
   hasProviderConfig,
+  selectRelevantSegments,
   summarizePageContent
 } from "~/src/sdk/provider"
 import {
@@ -56,6 +57,7 @@ import type {
   PageCaptureDraft,
   RecommendationInput,
   RecommendationResult,
+  SegmentSelectionResult,
   SmartFavoritesSettings,
   UpdateActiveProviderPayload,
   UpdateCollectionFolderPayload,
@@ -95,6 +97,8 @@ async function handleMessage(message: { type: string; payload?: unknown }) {
       return handleRecommendation(message.payload as RecommendationInput)
     case "bookmarks-collector/summarize-page-content":
       return handleSummarizePageContent(message.payload as PageDigestRequest)
+    case "bookmarks-collector/select-relevant-segments":
+      return handleSelectRelevantSegments(message.payload as PageDigestRequest)
     case "bookmarks-collector/apply-bookmark":
       return handleApplyBookmark(message.payload as ApplyBookmarkPayload)
     case "bookmarks-collector/export-snapshot":
@@ -236,6 +240,13 @@ async function handleUpdateActiveProvider(payload: UpdateActiveProviderPayload) 
 async function handleSummarizePageContent(payload: PageDigestRequest) {
   const settings = await getSettings()
   return summarizePageContent(payload, settings)
+}
+
+async function handleSelectRelevantSegments(
+  payload: PageDigestRequest
+): Promise<SegmentSelectionResult> {
+  const settings = await getSettings()
+  return selectRelevantSegments(payload.segments ?? [], settings, payload.providerId)
 }
 
 async function handleApplyBookmark(payload: ApplyBookmarkPayload) {

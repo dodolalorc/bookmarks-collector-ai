@@ -9,7 +9,8 @@ import type {
   CapturedSnippet,
   CapturePageResponse,
   PageContext,
-  PageCaptureDraft
+  PageCaptureDraft,
+  PageDigestSegment
 } from "../sdk/types"
 import {
   ROOT_ID,
@@ -24,6 +25,7 @@ import {
   cssPathFor,
   getCurrentSelectionText,
   getPageArticleText,
+  getPageArticleSegments,
   getPageContext
 } from "./capture/extract"
 import PageCaptureOverlay from "./PageCaptureOverlay.vue"
@@ -55,6 +57,8 @@ type OverlayState = {
   articleAuthor: string
   articleDate: string
   articleContent: string
+  articleSegments: PageDigestSegment[]
+  articleMode: "full" | "segments"
   aiPrompt: string
   aiModelId: string
   aiModelLabel: string
@@ -91,6 +95,8 @@ const state = reactive<OverlayState>({
   articleAuthor: "",
   articleDate: "",
   articleContent: "",
+  articleSegments: [],
+  articleMode: "full",
   aiPrompt: "",
   aiModelId: "",
   aiModelLabel: "",
@@ -142,11 +148,13 @@ const fetchDraft = async () => {
 
 const hydrateArticleFields = (page: PageContext) => {
   const articleContent = getPageArticleText()
+  const articleSegments = getPageArticleSegments()
   state.articleTitle = page.title || document.title || location.hostname
   state.articleUrl = page.url || location.href
   state.articleAuthor = page.author || ""
   state.articleDate = page.publishedAt || ""
   state.articleContent = articleContent
+  state.articleSegments = articleSegments
   state.aiCharCount = articleContent.length
   state.aiTokenEstimate = estimateTokens(articleContent)
 }
@@ -334,6 +342,9 @@ const renderOverlay = () => {
       content?: string
       prompt?: string
       modelId?: string
+      mode?: "full" | "segments"
+      segmentId?: string
+      segmentSelected?: boolean
     }) => {
       if (typeof payload.title === "string") {
         state.articleTitle = payload.title
@@ -371,10 +382,33 @@ const renderOverlay = () => {
           providerId: payload.modelId
         }).catch(() => undefined)
       }
+      if (payload.mode) {
+        state.articleMode = payload.mode
+      }
+      if (payload.segmentId && typeof payload.segmentSelected === "boolean") {
+        state.articleSegments = state.articleSegments.map((segment) =>
+          segment.id === payload.segmentId
+            ? {
+                ...segment,
+                selected: payload.segmentSelected
+              }
+            : segment
+        )
+      }
       renderOverlay()
     },
     onSummarizeArticle: () => {
       void summarizeArticle()
+    },
+    onSmartSelectSegments: () => {
+      void smartSelectSegments()
+    },
+    onSelectAllSegments: (selected: boolean) => {
+      state.articleSegments = state.articleSegments.map((segment) => ({
+        ...segment,
+        selected
+      }))
+      renderOverlay()
     },
     onClassifyNow: () => {
       state.bookmarkPromptVisible = false
@@ -434,12 +468,22 @@ const summarizeArticle = async () => {
     return
   }
 
+  if (
+    state.articleMode === "segments" &&
+    !state.articleSegments.some((segment) => segment.selected)
+  ) {
+    state.aiStatus = "分段模式下至少需要保留一段正文。"
+    renderOverlay()
+    return
+  }
+
   state.aiRunning = true
   state.aiStatus = "正在将当前页面整理成 AI 易读格式…"
   renderOverlay()
 
   try {
     const page = getPageContext()
+    const activeSegments = state.articleSegments.filter((segment) => segment.selected)
     const result = await sendMessage<{
       modelLabel: string
       providerId: string
@@ -454,6 +498,8 @@ const summarizeArticle = async () => {
         publishedAt: state.articleDate.trim() || page.publishedAt
       },
       content: state.articleContent,
+      mode: state.articleMode,
+      segments: activeSegments,
       prompt: state.aiPrompt,
       providerId: state.aiModelId
     })
@@ -467,6 +513,55 @@ const summarizeArticle = async () => {
   } catch (error) {
     state.aiStatus =
       error instanceof Error ? error.message : "AI 整理失败，请稍后再试。"
+  } finally {
+    state.aiRunning = false
+    renderOverlay()
+  }
+}
+
+const smartSelectSegments = async () => {
+  if (!state.aiConfigured) {
+    state.aiStatus = state.aiConfigNotice || "尚未配置模型，请前往插件管理页 > 模型配置进行配置。"
+    renderOverlay()
+    return
+  }
+
+  if (state.articleSegments.length === 0) {
+    state.aiStatus = "当前页面没有可供分段筛选的正文。"
+    renderOverlay()
+    return
+  }
+
+  state.aiRunning = true
+  state.aiStatus = "正在智能选取正文相关段落…"
+  renderOverlay()
+
+  try {
+    const result = await sendMessage<{
+      selectedSegmentIds: string[]
+      reasons: Array<{ segmentId: string; reason: string }>
+      modelLabel: string
+    }>("bookmarks-collector/select-relevant-segments", {
+      page: getPageContext(),
+      content: state.articleContent,
+      mode: "segments",
+      segments: state.articleSegments,
+      providerId: state.aiModelId
+    })
+
+    const reasonMap = new Map(
+      result.reasons.map((item) => [item.segmentId, item.reason] as const)
+    )
+
+    state.articleSegments = state.articleSegments.map((segment) => ({
+      ...segment,
+      selected: result.selectedSegmentIds.includes(segment.id),
+      reason: reasonMap.get(segment.id)
+    }))
+    state.aiStatus = `已完成智能选取，当前使用模型：${result.modelLabel}`
+  } catch (error) {
+    state.aiStatus =
+      error instanceof Error ? error.message : "智能选取失败，请稍后再试。"
   } finally {
     state.aiRunning = false
     renderOverlay()
@@ -496,8 +591,12 @@ const updateSelectionAnchor = () => {
 
   state.selectionText = text
   state.selectionAnchorVisible = true
-  state.selectionAnchor.top = Math.min(lastRect.bottom + 10, window.innerHeight - 18)
-  state.selectionAnchor.left = Math.min(lastRect.right + 8, window.innerWidth - 18)
+  const sidebarInset = state.sidebarOpen ? state.sidebarWidth : 0
+  const maxLeft = Math.max(24, window.innerWidth - sidebarInset - 24)
+  const maxTop = Math.max(24, window.innerHeight - 24)
+
+  state.selectionAnchor.top = Math.min(lastRect.bottom + 12, maxTop)
+  state.selectionAnchor.left = Math.min(Math.max(lastRect.right, 24), maxLeft)
   renderOverlay()
 }
 

@@ -21,6 +21,7 @@ import type {
   PageDigestResult,
   RecommendationInput,
   RecommendationResult,
+  SegmentSelectionResult,
   SnippetCollectionState,
   SmartFavoritesSettings,
   UpdateCollectionFolderPayload,
@@ -67,6 +68,13 @@ export class SmartFavoritesSDK {
   async summarizePageContent(payload: PageDigestRequest) {
     return sendRuntimeMessage<PageDigestResult>(
       "bookmarks-collector/summarize-page-content",
+      payload
+    )
+  }
+
+  async selectRelevantSegments(payload: PageDigestRequest) {
+    return sendRuntimeMessage<SegmentSelectionResult>(
+      "bookmarks-collector/select-relevant-segments",
       payload
     )
   }

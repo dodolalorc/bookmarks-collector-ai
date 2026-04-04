@@ -1,7 +1,7 @@
 ﻿<script setup lang="ts">
 import { computed } from "vue"
 
-import type { AiModelProfile, CapturedSnippet } from "../sdk/types"
+import type { AiModelProfile, CapturedSnippet, PageDigestSegment } from "../sdk/types"
 import OverlaySnippetCard from "./OverlaySnippetCard.vue"
 
 type OverlayStateView = {
@@ -23,6 +23,8 @@ type OverlayStateView = {
   articleAuthor: string
   articleDate: string
   articleContent: string
+  articleSegments: PageDigestSegment[]
+  articleMode: "full" | "segments"
   aiPrompt: string
   aiModelId: string
   aiModelLabel: string
@@ -67,9 +69,14 @@ const emit = defineEmits<{
       content?: string
       prompt?: string
       modelId?: string
+      mode?: "full" | "segments"
+      segmentId?: string
+      segmentSelected?: boolean
     }
   ]
   summarizeArticle: []
+  smartSelectSegments: []
+  selectAllSegments: [selected: boolean]
   classifyNow: []
   dismissBookmarkPrompt: []
   showSelectionPrompt: []
@@ -98,7 +105,7 @@ const aiBallStyle = computed(() => ({
 
 const selectionPromptStyle = computed(() => ({
   top: `${props.state.selectionAnchor.top + 22}px`,
-  left: `${props.state.selectionAnchor.left - 52}px`
+  left: `${Math.max(props.state.selectionAnchor.left - 44, 16)}px`
 }))
 
 const selectionDotStyle = computed(() => ({
@@ -111,6 +118,10 @@ const aiMetaSummary = computed(() => [
   { label: "预估 Token", value: props.state.aiTokenEstimate.toLocaleString() },
   { label: "模型", value: props.state.aiModelLabel || "未配置模型" }
 ])
+
+const selectedSegmentCount = computed(
+  () => props.state.articleSegments.filter((segment) => segment.selected).length
+)
 
 const onTextInput =
   (key: "title" | "url" | "author" | "date" | "content" | "prompt") =>
@@ -136,6 +147,19 @@ const onModelChange = (event: Event) => {
 
   emit("updateArticleMeta", {
     modelId: target.value
+  })
+}
+
+const onModeChange = (mode: "full" | "segments") => {
+  emit("updateArticleMeta", {
+    mode
+  })
+}
+
+const onSegmentToggle = (segmentId: string, selected: boolean) => {
+  emit("updateArticleMeta", {
+    segmentId,
+    segmentSelected: selected
   })
 }
 </script>
@@ -338,7 +362,21 @@ const onModelChange = (event: Event) => {
         <div class="field-wrap">
           <div class="field-row">
             <span class="field-label">文章主要内容</span>
-            <div class="field-stats">
+            <div class="field-stats mode-row">
+              <div class="mode-switch">
+                <button
+                  class="mode-chip"
+                  :class="{ active: state.articleMode === 'full' }"
+                  @click="onModeChange('full')">
+                  全文模式
+                </button>
+                <button
+                  class="mode-chip"
+                  :class="{ active: state.articleMode === 'segments' }"
+                  @click="onModeChange('segments')">
+                  分段模式
+                </button>
+              </div>
               <span
                 v-for="item in aiMetaSummary"
                 :key="item.label"
@@ -348,9 +386,49 @@ const onModelChange = (event: Event) => {
             </div>
           </div>
           <textarea
+            v-if="state.articleMode === 'full'"
             class="field textarea-large"
             :value="state.articleContent"
             @input="onTextInput('content')" />
+          <div v-else class="segment-panel">
+            <div class="segment-toolbar">
+              <div class="segment-summary">
+                已选 {{ selectedSegmentCount }} / {{ state.articleSegments.length }} 段
+              </div>
+              <div class="segment-actions">
+                <button class="chip" @click="emit('selectAllSegments', true)">
+                  全选
+                </button>
+                <button class="chip" @click="emit('selectAllSegments', false)">
+                  清空
+                </button>
+                <button
+                  class="chip chip-gradient"
+                  :disabled="state.aiRunning || !state.aiConfigured"
+                  @click="emit('smartSelectSegments')">
+                  <font-awesome-icon icon="brain" />
+                  智能选取
+                </button>
+              </div>
+            </div>
+            <div class="segment-list">
+              <label
+                v-for="segment in state.articleSegments"
+                :key="segment.id"
+                class="segment-card"
+                :class="{ off: !segment.selected }">
+                <div class="segment-card-head">
+                  <input
+                    type="checkbox"
+                    :checked="segment.selected"
+                    @change="onSegmentToggle(segment.id, !segment.selected)" />
+                  <span class="segment-index">段落 {{ segment.order + 1 }}</span>
+                </div>
+                <div class="segment-text">{{ segment.text }}</div>
+                <div v-if="segment.reason" class="segment-reason">{{ segment.reason }}</div>
+              </label>
+            </div>
+          </div>
         </div>
 
         <div class="field-wrap">
@@ -476,6 +554,7 @@ const onModelChange = (event: Event) => {
   position: fixed;
   pointer-events: auto;
   z-index: 2147483647;
+  animation: anchor-in 180ms ease;
 }
 
 .selection-anchor {
@@ -510,6 +589,7 @@ const onModelChange = (event: Event) => {
   background: linear-gradient(180deg, #fff8ff 0%, #f4fbff 100%);
   border: 1px solid rgba(137, 175, 233, 0.24);
   box-shadow: 0 18px 34px rgba(85, 106, 155, 0.2);
+  animation: pop-in 160ms ease;
 }
 
 .selection-anchor-title {
@@ -739,6 +819,7 @@ const onModelChange = (event: Event) => {
   pointer-events: auto;
   background: rgba(37, 50, 77, 0.24);
   backdrop-filter: blur(4px);
+  animation: fade-in 220ms ease;
 }
 
 .ai-dialog {
@@ -761,6 +842,8 @@ const onModelChange = (event: Event) => {
   );
   border: 1px solid rgba(236, 203, 120, 0.22);
   box-shadow: 0 30px 80px rgba(75, 105, 150, 0.26);
+  transform-origin: center bottom;
+  animation: dock-open 300ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .config-notice {
@@ -802,6 +885,35 @@ const onModelChange = (event: Event) => {
   justify-content: flex-end;
 }
 
+.mode-row {
+  align-items: center;
+}
+
+.mode-switch {
+  display: inline-flex;
+  padding: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(147, 168, 197, 0.22);
+}
+
+.mode-chip {
+  border: 0;
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: transparent;
+  color: #6a7794;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.mode-chip.active {
+  background: linear-gradient(135deg, #fff0c7 0%, #ffdca1 100%);
+  color: #714d12;
+}
+
 .stat-pill {
   padding: 6px 10px;
   border-radius: 999px;
@@ -833,6 +945,125 @@ const onModelChange = (event: Event) => {
   min-height: 92px;
   resize: vertical;
   line-height: 1.6;
+}
+
+.segment-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.segment-toolbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.segment-summary {
+  font-size: 13px;
+  font-weight: 700;
+  color: #5c6c87;
+}
+
+.segment-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.segment-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 360px;
+  overflow: auto;
+}
+
+.segment-card {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(147, 168, 197, 0.26);
+  background: rgba(255, 255, 255, 0.82);
+  cursor: pointer;
+}
+
+.segment-card.off {
+  opacity: 0.58;
+}
+
+.segment-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.segment-index {
+  font-size: 12px;
+  font-weight: 800;
+  color: #7a87a3;
+  letter-spacing: 0.04em;
+}
+
+.segment-text {
+  color: #22314f;
+  line-height: 1.8;
+  white-space: pre-wrap;
+}
+
+.segment-reason {
+  color: #8a6a23;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes anchor-in {
+  from {
+    opacity: 0;
+    transform: scale(0.88);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes dock-open {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(20px) scale(0.92);
+  }
+  60% {
+    opacity: 1;
+    transform: translateX(-50%) translateY(-4px) scale(1.015);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+  }
 }
 
 .action-row {

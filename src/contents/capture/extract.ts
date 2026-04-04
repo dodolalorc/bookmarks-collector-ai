@@ -1,4 +1,4 @@
-import type { CapturedSnippet, PageContext } from "../../sdk/types"
+import type { CapturedSnippet, PageContext, PageDigestSegment } from "../../sdk/types"
 
 const readMeta = (selector: string, attr = "content") =>
     document.querySelector(selector)?.getAttribute(attr)?.trim() ?? ""
@@ -182,6 +182,23 @@ export const getPageArticleText = () => {
   ).slice(0, 32000)
 
   return content
+}
+
+export const getPageArticleSegments = (): PageDigestSegment[] => {
+  const articleRoot = sanitizeRoot(pickArticleRoot())
+  const blocks = uniqueTextBlocks(
+    readTextBlocks(articleRoot, "p, li, blockquote, pre code, figcaption, td")
+  )
+    .map((text) => normalizeText(text))
+    .filter((text) => text.length >= 36)
+    .slice(0, 120)
+
+  return blocks.map((text, index) => ({
+    id: `segment-${index + 1}`,
+    text,
+    selected: true,
+    order: index
+  }))
 }
 
 const buildSummaryBlocks = (root: Element) =>
