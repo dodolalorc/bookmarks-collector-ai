@@ -7,6 +7,7 @@ import { getProviderConfigNotice, resolveProvider } from "../sdk/provider"
 import type {
   BookmarkMutationResult,
   CapturePageResponse,
+  ExperimentCondition,
   RecommendationInput,
   RecommendationResult,
   SmartFavoritesSettings
@@ -31,6 +32,7 @@ const selectedTarget = ref("")
 const status = ref("正在读取当前页面…")
 const isLoading = ref(false)
 const result = ref<BookmarkMutationResult | null>(null)
+const recommendationStartedAt = ref<number | null>(null)
 
 const canRecommend = computed(() => Boolean(capture.value?.page.url))
 const selectedSuggestion = computed(() =>
@@ -146,6 +148,7 @@ const runRecommendation = async () => {
   }
 
   isLoading.value = true
+  recommendationStartedAt.value = Date.now()
   status.value = "正在分析页面和现有收藏夹结构…"
 
   try {
@@ -190,6 +193,9 @@ const applyRecommendation = async () => {
   status.value = "正在写入浏览器书签…"
 
   try {
+    const selectedRank = recommendation.value?.suggestions.findIndex(
+      (item) => item.key === selectedSuggestion.value?.key
+    )
     const mutation = await sdk.applyBookmarkRecommendation({
       page: capture.value.page,
       input: {
@@ -208,6 +214,34 @@ const applyRecommendation = async () => {
     })
 
     result.value = mutation
+    if (recommendation.value) {
+      const condition: ExperimentCondition =
+        recommendation.value.source === "ai" ? "enhanced" : "rule"
+      const rank = typeof selectedRank === "number" && selectedRank >= 0
+        ? selectedRank + 1
+        : undefined
+
+      await sdk.recordExperimentEvent({
+        condition,
+        source: "popup",
+        pageTitle: capture.value.page.title,
+        url: capture.value.page.url,
+        domain: capture.value.page.domain,
+        folderPath: mutation.folderPath,
+        steps:
+          recommendation.value.suggestions[0]?.key === selectedSuggestion.value.key
+            ? 2
+            : 3,
+        latencyMs: recommendationStartedAt.value
+          ? Date.now() - recommendationStartedAt.value
+          : 0,
+        suggestionCount: recommendation.value.suggestions.length,
+        selectedRank: rank,
+        top1Accepted: rank === 1,
+        top3Covered: Boolean(rank && rank <= 3),
+        recommendedPaths: recommendation.value.suggestions.map((item) => item.path)
+      })
+    }
     status.value = mutation.message
   } catch (error) {
     status.value =

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue"
 
+import { buildAnalyticsSummary } from "../sdk/analytics"
 import { SmartFavoritesSDK } from "../sdk/client"
 import { getProviderConfigNotice, resolveProvider } from "../sdk/provider"
 import {
@@ -11,6 +12,9 @@ import {
 import type {
   AiModelProfile,
   BookmarkMoveDecision,
+  ExperimentCondition,
+  ExperimentEvent,
+  ExperimentPageType,
   ExportSnapshot,
   HistoryRecommendationItem,
   KnowledgeRecord,
@@ -31,14 +35,16 @@ const sdk = new SmartFavoritesSDK()
 const importInput = ref<HTMLInputElement | null>(null)
 const settings = ref<SmartFavoritesSettings | null>(null)
 const status = ref("正在加载设置…")
-const tab = ref<"quickstart" | "settings" | "history" | "knowledge">(
+const tab = ref<"quickstart" | "settings" | "history" | "knowledge" | "analytics">(
   location.hash === "#quickstart"
     ? "quickstart"
     : location.hash === "#history"
       ? "history"
       : location.hash === "#knowledge"
         ? "knowledge"
-        : "settings"
+        : location.hash === "#analytics"
+          ? "analytics"
+          : "settings"
 )
 const historyItems = ref<HistoryRecommendationItem[]>([])
 const selectedIds = ref<string[]>([])
@@ -49,6 +55,8 @@ const collections = ref<SnippetCollectionState>({
 })
 const knowledgeRecords = ref<KnowledgeRecord[]>([])
 const knowledgeStatus = ref("正在加载知识记录…")
+const experimentEvents = ref<ExperimentEvent[]>([])
+const analyticsStatus = ref("正在加载实验统计…")
 const knowledgeQuery = ref("")
 const collectionsStatus = ref("正在加载收藏夹…")
 const showApiKey = ref(false)
@@ -62,6 +70,16 @@ const expandedItemIds = ref<string[]>([])
 const editingItemId = ref("")
 const editingItemTitle = ref("")
 const editingItemText = ref("")
+const historyRecommendationStartedAt = ref<number | null>(null)
+const manualCondition = ref<ExperimentCondition>("manual")
+const manualPageType = ref<ExperimentPageType>("unknown")
+const manualSteps = ref("0")
+const manualLatencyMs = ref("0")
+const manualTop1Accepted = ref(false)
+const manualTop3Covered = ref(false)
+const manualExplanationSatisfaction = ref("")
+const manualInterventionSatisfaction = ref("")
+const manualNotes = ref("")
 
 const quickStartSections = [
   {
@@ -164,11 +182,36 @@ const activeProviderNotice = computed(() => {
   return getProviderConfigNotice(resolveProvider(settings.value))
 })
 
+const analyticsSummary = computed(() =>
+  buildAnalyticsSummary(experimentEvents.value, knowledgeRecords.value)
+)
+
+const knowledgeInsightCards = computed(() => {
+  const tagCount = new Set(
+    knowledgeRecords.value.flatMap((record) => record.tags)
+  ).size
+  const folderCount = new Set(
+    knowledgeRecords.value.map((record) => record.folderPath || "uncategorized")
+  ).size
+  const recentCount = knowledgeRecords.value.filter((record) => {
+    const time = new Date(record.createdAt).getTime()
+    return !Number.isNaN(time) && Date.now() - time <= 7 * 24 * 60 * 60 * 1000
+  }).length
+
+  return [
+    { label: "知识记录", value: String(knowledgeRecords.value.length) },
+    { label: "目录类别", value: String(folderCount) },
+    { label: "标签数量", value: String(tagCount) },
+    { label: "近 7 日新增", value: String(recentCount) }
+  ]
+})
+
 onMounted(() => {
   void loadSettings()
   void refreshHistory()
   void loadCollections()
   void loadKnowledgeRecords()
+  void loadExperimentEvents()
 
   const onHashChange = () => {
     tab.value =
@@ -178,6 +221,8 @@ onMounted(() => {
           ? "history"
           : location.hash === "#knowledge"
             ? "knowledge"
+            : location.hash === "#analytics"
+              ? "analytics"
             : "settings"
   }
 
@@ -234,6 +279,14 @@ const loadKnowledgeRecords = async () => {
       : "当前还没有知识记录，执行书签确认后会在这里沉淀学习轨迹。"
 }
 
+const loadExperimentEvents = async () => {
+  experimentEvents.value = await sdk.getExperimentEvents()
+  analyticsStatus.value =
+    experimentEvents.value.length > 0
+      ? `已加载 ${experimentEvents.value.length} 条实验事件。`
+      : "当前还没有实验事件，可先执行一次推荐确认或手动补录。"
+}
+
 const saveSettings = async () => {
   if (!settings.value) {
     return
@@ -281,7 +334,8 @@ const importBackup = async (event: Event) => {
       loadSettings(),
       loadCollections(),
       loadKnowledgeRecords(),
-      refreshHistory()
+      refreshHistory(),
+      loadExperimentEvents()
     ])
     status.value =
       `已导入备份：${result.knowledgeCount} 条知识记录，` +
@@ -295,6 +349,7 @@ const importBackup = async (event: Event) => {
 }
 
 const refreshHistory = async () => {
+  historyRecommendationStartedAt.value = Date.now()
   historyStatus.value = "正在重新生成历史书签推荐…"
   const items = await sdk.listHistoryBookmarks(40)
   historyItems.value = items.filter(
@@ -313,11 +368,33 @@ const applySelected = async () => {
     return
   }
 
-  const result = await sdk.applyBulkBookmarkRecommendations(
-    selectedDecisions.value
+  const selectedItems = historyItems.value.filter((item) =>
+    selectedIds.value.includes(item.bookmark.id)
+  )
+  const result = await sdk.applyBulkBookmarkRecommendations(selectedDecisions.value)
+  await Promise.all(
+    selectedItems.map((item, index) =>
+      sdk.recordExperimentEvent({
+        condition: "rule",
+        source: "history",
+        pageTitle: item.bookmark.title,
+        url: item.bookmark.url,
+        domain: new URL(item.bookmark.url).hostname,
+        folderPath: result.results[index]?.folderPath,
+        steps: 2,
+        latencyMs: historyRecommendationStartedAt.value
+          ? Date.now() - historyRecommendationStartedAt.value
+          : 0,
+        suggestionCount: item.recommendation.suggestions.length,
+        selectedRank: 1,
+        top1Accepted: true,
+        top3Covered: item.recommendation.suggestions.length > 0,
+        recommendedPaths: item.recommendation.suggestions.map((suggestion) => suggestion.path)
+      })
+    )
   )
   historyStatus.value = `已迁移 ${result.moved} 条书签。`
-  await refreshHistory()
+  await Promise.all([refreshHistory(), loadExperimentEvents(), loadKnowledgeRecords()])
 }
 
 const toggleSelected = (id: string) => {
@@ -326,7 +403,9 @@ const toggleSelected = (id: string) => {
     : [...selectedIds.value, id]
 }
 
-const switchTab = (next: "quickstart" | "settings" | "history" | "knowledge") => {
+const switchTab = (
+  next: "quickstart" | "settings" | "history" | "knowledge" | "analytics"
+) => {
   tab.value = next
   location.hash =
     next === "quickstart"
@@ -335,6 +414,8 @@ const switchTab = (next: "quickstart" | "settings" | "history" | "knowledge") =>
         ? "#history"
         : next === "knowledge"
           ? "#knowledge"
+          : next === "analytics"
+            ? "#analytics"
           : ""
 }
 
@@ -653,6 +734,48 @@ const formatKnowledgeTime = (value: string) => {
   const date = new Date(value)
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString()
 }
+
+const formatPercent = (value: number) => `${(value * 100).toFixed(1)}%`
+
+const formatDuration = (value: number) =>
+  value >= 1000 ? `${(value / 1000).toFixed(2)} s` : `${Math.round(value)} ms`
+
+const distributionStyle = (ratio: number) => ({
+  width: `${Math.max(ratio * 100, 4)}%`
+})
+
+const saveManualExperimentRecord = async () => {
+  const explanationValue = Number(manualExplanationSatisfaction.value)
+  const interventionValue = Number(manualInterventionSatisfaction.value)
+
+  await sdk.recordExperimentEvent({
+    condition: manualCondition.value,
+    source: "manual",
+    pageType: manualPageType.value,
+    steps: Number(manualSteps.value) || 0,
+    latencyMs: Number(manualLatencyMs.value) || 0,
+    suggestionCount: manualCondition.value === "manual" ? 0 : 3,
+    top1Accepted: manualTop1Accepted.value,
+    top3Covered: manualTop3Covered.value,
+    explanationSatisfaction: Number.isNaN(explanationValue)
+      ? undefined
+      : explanationValue,
+    interventionSatisfaction: Number.isNaN(interventionValue)
+      ? undefined
+      : interventionValue,
+    notes: manualNotes.value
+  })
+
+  manualSteps.value = "0"
+  manualLatencyMs.value = "0"
+  manualTop1Accepted.value = false
+  manualTop3Covered.value = false
+  manualExplanationSatisfaction.value = ""
+  manualInterventionSatisfaction.value = ""
+  manualNotes.value = ""
+  await loadExperimentEvents()
+  analyticsStatus.value = "已补录实验事件。"
+}
 </script>
 
 <template>
@@ -692,6 +815,12 @@ const formatKnowledgeTime = (value: string) => {
           @click="switchTab('knowledge')">
           <font-awesome-icon icon="book-open" />
           知识笔记
+        </BaseButton>
+        <BaseButton
+          :variant="tab === 'analytics' ? 'primary' : 'secondary'"
+          @click="switchTab('analytics')">
+          <font-awesome-icon icon="vector-square" />
+          数据看板
         </BaseButton>
         <BaseButton @click="openGithub">
           <font-awesome-icon icon="up-right-from-square" />
@@ -1090,7 +1219,7 @@ const formatKnowledgeTime = (value: string) => {
       </BaseCard>
     </template>
 
-    <template v-else>
+    <template v-else-if="tab === 'knowledge'">
       <BaseCard class="history-header">
         <div>
           <SectionHeader compact title="知识笔记库" />
@@ -1101,6 +1230,53 @@ const formatKnowledgeTime = (value: string) => {
             <font-awesome-icon icon="arrows-rotate" />
             刷新记录
           </BaseButton>
+        </div>
+      </BaseCard>
+
+      <BaseCard>
+        <div class="metrics-grid compact-grid">
+          <div
+            v-for="card in knowledgeInsightCards"
+            :key="card.label"
+            class="metric-panel">
+            <div class="metric-label">{{ card.label }}</div>
+            <div class="metric-value">{{ card.value }}</div>
+          </div>
+        </div>
+      </BaseCard>
+
+      <BaseCard>
+        <div class="analytics-columns">
+          <div>
+            <div class="quickstart-title">目录分布</div>
+            <div
+              v-for="item in analyticsSummary.folderDistribution"
+              :key="item.label"
+              class="distribution-item">
+              <div class="distribution-head">
+                <span>{{ item.label }}</span>
+                <span>{{ item.count }} · {{ formatPercent(item.ratio) }}</span>
+              </div>
+              <div class="distribution-track">
+                <div class="distribution-fill" :style="distributionStyle(item.ratio)" />
+              </div>
+            </div>
+          </div>
+          <div>
+            <div class="quickstart-title">标签频率</div>
+            <div
+              v-for="item in analyticsSummary.tagDistribution"
+              :key="item.label"
+              class="distribution-item">
+              <div class="distribution-head">
+                <span>{{ item.label }}</span>
+                <span>{{ item.count }} · {{ formatPercent(item.ratio) }}</span>
+              </div>
+              <div class="distribution-track">
+                <div class="distribution-fill warm" :style="distributionStyle(item.ratio)" />
+              </div>
+            </div>
+          </div>
         </div>
       </BaseCard>
 
@@ -1145,6 +1321,124 @@ const formatKnowledgeTime = (value: string) => {
         <div v-if="record.selectedText" class="knowledge-block">
           <div class="knowledge-label">选中片段</div>
           <div class="knowledge-quote">{{ record.selectedText }}</div>
+        </div>
+      </BaseCard>
+    </template>
+    <template v-else>
+      <BaseCard class="history-header">
+        <div>
+          <SectionHeader compact title="数据看板" />
+          <div class="status">{{ analyticsStatus }}</div>
+        </div>
+        <div class="button-row">
+          <BaseButton @click="loadExperimentEvents">
+            <font-awesome-icon icon="arrows-rotate" />
+            刷新统计
+          </BaseButton>
+        </div>
+      </BaseCard>
+
+      <BaseCard>
+        <div class="metrics-grid compact-grid">
+          <div class="metric-panel">
+            <div class="metric-label">实验事件</div>
+            <div class="metric-value">{{ analyticsSummary.totalEvents }}</div>
+          </div>
+          <div class="metric-panel">
+            <div class="metric-label">知识记录</div>
+            <div class="metric-value">{{ analyticsSummary.totalKnowledgeRecords }}</div>
+          </div>
+          <div class="metric-panel">
+            <div class="metric-label">唯一页面</div>
+            <div class="metric-value">{{ analyticsSummary.uniquePages }}</div>
+          </div>
+        </div>
+      </BaseCard>
+
+      <BaseCard>
+        <div class="table-scroll">
+          <table class="stats-table">
+            <thead>
+              <tr>
+                <th>条件</th>
+                <th>任务数</th>
+                <th>Top-1</th>
+                <th>Top-3</th>
+                <th>平均步数</th>
+                <th>平均时延</th>
+                <th>解释满意度</th>
+                <th>可干预满意度</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="row in analyticsSummary.conditionRows" :key="row.condition">
+                <td>{{ row.condition }}</td>
+                <td>{{ row.total }}</td>
+                <td>{{ formatPercent(row.top1Rate) }}</td>
+                <td>{{ formatPercent(row.top3Rate) }}</td>
+                <td>{{ row.avgSteps.toFixed(2) }}</td>
+                <td>{{ formatDuration(row.avgLatencyMs) }}</td>
+                <td>{{ row.avgExplanationSatisfaction?.toFixed(2) || "-" }}</td>
+                <td>{{ row.avgInterventionSatisfaction?.toFixed(2) || "-" }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </BaseCard>
+
+      <BaseCard>
+        <div class="analytics-columns">
+          <div class="folder-form">
+            <div class="quickstart-title">实验补录</div>
+            <select v-model="manualCondition" class="field">
+              <option value="manual">manual</option>
+              <option value="rule">rule</option>
+              <option value="enhanced">enhanced</option>
+            </select>
+            <select v-model="manualPageType" class="field">
+              <option value="unknown">unknown</option>
+              <option value="structured">structured</option>
+              <option value="semi-structured">semi-structured</option>
+              <option value="high-noise">high-noise</option>
+            </select>
+            <input v-model="manualSteps" class="field" placeholder="整理步数" />
+            <input v-model="manualLatencyMs" class="field" placeholder="处理时延 ms" />
+            <input v-model="manualExplanationSatisfaction" class="field" placeholder="解释满意度 1-5" />
+            <input v-model="manualInterventionSatisfaction" class="field" placeholder="可干预满意度 1-5" />
+            <label class="check-item">
+              <input v-model="manualTop1Accepted" type="checkbox" />
+              <span>Top-1 被采纳</span>
+            </label>
+            <label class="check-item">
+              <input v-model="manualTop3Covered" type="checkbox" />
+              <span>Top-3 覆盖命中</span>
+            </label>
+            <textarea v-model="manualNotes" class="field" rows="4" placeholder="参与者编号、任务编号或备注" />
+            <BaseButton variant="primary" @click="saveManualExperimentRecord">
+              <font-awesome-icon icon="floppy-disk" />
+              保存补录
+            </BaseButton>
+          </div>
+          <div>
+            <div class="quickstart-title">最近事件</div>
+            <div v-for="event in experimentEvents.slice(0, 10)" :key="event.id" class="event-card">
+              <div class="folder-item-top">
+                <div>
+                  <div class="folder-name">{{ event.pageTitle || "手工补录任务" }}</div>
+                  <div class="folder-desc">
+                    {{ event.condition }} / {{ event.source }} / {{ formatKnowledgeTime(event.createdAt) }}
+                  </div>
+                </div>
+                <span class="tag-chip">{{ event.pageType || "unknown" }}</span>
+              </div>
+              <div class="knowledge-meta">
+                <span>步数：{{ event.steps }}</span>
+                <span>时延：{{ formatDuration(event.latencyMs) }}</span>
+                <span>Top-1：{{ event.top1Accepted ? "是" : "否" }}</span>
+                <span>Top-3：{{ event.top3Covered ? "是" : "否" }}</span>
+              </div>
+            </div>
+          </div>
         </div>
       </BaseCard>
     </template>
@@ -1251,6 +1545,97 @@ const formatKnowledgeTime = (value: string) => {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   gap: var(--sf-space-3);
+}
+
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--sf-space-3);
+}
+
+.compact-grid {
+  max-width: 1180px;
+}
+
+.metric-panel,
+.event-card {
+  border: 1px solid rgba(124, 148, 188, 0.16);
+  border-radius: 18px;
+  padding: 16px;
+  background: linear-gradient(180deg, #fff, #f9fbff);
+}
+
+.metric-label {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #7b8ab1;
+}
+
+.metric-value {
+  margin-top: 8px;
+  font-size: 28px;
+  font-weight: 800;
+  color: #24324c;
+}
+
+.analytics-columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: var(--sf-space-4);
+}
+
+.distribution-item {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.distribution-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: #607089;
+  font-size: 13px;
+}
+
+.distribution-track {
+  height: 10px;
+  border-radius: 999px;
+  background: #edf3fb;
+  overflow: hidden;
+}
+
+.distribution-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #6f95ff 0%, #59bfff 100%);
+}
+
+.distribution-fill.warm {
+  background: linear-gradient(90deg, #ffb56b 0%, #ff7f92 100%);
+}
+
+.table-scroll {
+  overflow-x: auto;
+}
+
+.stats-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.stats-table th,
+.stats-table td {
+  padding: 12px 14px;
+  border-bottom: 1px solid #dfe8f4;
+  text-align: left;
+}
+
+.stats-table th {
+  color: #607089;
+  font-size: 13px;
 }
 
 .provider-card {

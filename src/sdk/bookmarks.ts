@@ -1,4 +1,5 @@
 import {
+  getExperimentEvents,
   getAllCaptureDrafts,
   getKnowledgeRecords,
   getSnippetCollections
@@ -296,8 +297,9 @@ export async function buildExportSnapshot(
   settings: SmartFavoritesSettings,
   folderIndex: FolderIndex
 ): Promise<ExportSnapshot> {
-  const [knowledge, drafts, collections] = await Promise.all([
+  const [knowledge, analytics, drafts, collections] = await Promise.all([
     getKnowledgeRecords(),
+    getExperimentEvents(),
     getAllCaptureDrafts(),
     getSnippetCollections()
   ])
@@ -306,6 +308,7 @@ export async function buildExportSnapshot(
     exportedAt: new Date().toISOString(),
     settings,
     knowledge,
+    analytics,
     folders: folderIndex.folders,
     drafts,
     collections

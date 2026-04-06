@@ -22,12 +22,14 @@ import {
   deleteSnippetFolder,
   getCaptureDraft,
   getKnowledgeRecords,
+  getExperimentEvents,
   getRecommendationFeedback,
   getSnippetCollections,
   getSettings,
   importSnapshotData,
   moveSnippetCollectionItem,
   pushRecommendationFeedback,
+  recordExperimentEvent,
   pushKnowledgeRecord,
   removeCapturedSnippet,
   saveSettings,
@@ -47,6 +49,7 @@ import type {
   CreateCollectionFolderPayload,
   DeleteCollectionFolderPayload,
   DeleteCollectionItemPayload,
+  ExperimentEvent,
   ExtensionPageOpenPayload,
   ExportSnapshot,
   HistoryRecommendationItem,
@@ -57,6 +60,7 @@ import type {
   PageCaptureDraft,
   RecommendationInput,
   RecommendationResult,
+  RecordExperimentEventPayload,
   SegmentSelectionResult,
   SmartFavoritesSettings,
   UpdateActiveProviderPayload,
@@ -150,6 +154,12 @@ async function handleMessage(message: { type: string; payload?: unknown }) {
       return getSnippetCollections()
     case "bookmarks-collector/get-knowledge-records":
       return getKnowledgeRecords()
+    case "bookmarks-collector/get-experiment-events":
+      return getExperimentEvents()
+    case "bookmarks-collector/record-experiment-event":
+      return handleRecordExperimentEvent(
+        message.payload as RecordExperimentEventPayload
+      )
     case "bookmarks-collector/create-snippet-folder":
       return handleCreateSnippetFolder(message.payload as CreateCollectionFolderPayload)
     case "bookmarks-collector/update-snippet-folder":
@@ -392,6 +402,12 @@ async function handleCreateSnippetFolder(
     collections,
     folderId: folder?.id ?? ""
   }
+}
+
+async function handleRecordExperimentEvent(
+  payload: RecordExperimentEventPayload
+): Promise<ExperimentEvent[]> {
+  return recordExperimentEvent(payload)
 }
 
 async function handleUpdateSnippetFolder(

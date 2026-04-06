@@ -1,4 +1,5 @@
 import type { BookmarkFolder } from "./bookmarks"
+import type { ExperimentEvent } from "./analytics"
 import type { SnippetCollectionState } from "./bookmarks"
 import type { PageCaptureDraft } from "./page"
 
@@ -47,6 +48,7 @@ export interface ExportSnapshot {
   exportedAt: string
   settings: SmartFavoritesSettings
   knowledge: KnowledgeRecord[]
+  analytics: ExperimentEvent[]
   folders: BookmarkFolder[]
   drafts: PageCaptureDraft[]
   collections: SnippetCollectionState
@@ -58,4 +60,5 @@ export interface ImportSnapshotResult {
   draftCount: number
   collectionFolderCount: number
   collectionItemCount: number
+  analyticsCount?: number
 }

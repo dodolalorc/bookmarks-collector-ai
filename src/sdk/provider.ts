@@ -28,12 +28,12 @@ function resolveProvider(
   const candidates = settings.providers?.length
     ? settings.providers
     : [
-        {
-          id: settings.activeProviderId || "default-provider",
-          label: settings.provider.model || "默认模型",
-          ...settings.provider
-        }
-      ]
+      {
+        id: settings.activeProviderId || "default-provider",
+        label: settings.provider.model || "默认模型",
+        ...settings.provider
+      }
+    ]
 
   return (
     candidates.find((provider) => provider.id === providerId) ??
@@ -153,51 +153,133 @@ function parseJsonResponse(content: string) {
 
 const heuristicSnippetAnalysis = (text: string): SnippetAnalysisResult => {
   const normalized = text.replace(/\s+/g, " ").trim()
-  const sentenceMatch = normalized.match(/[^。！？!?\.]+[。！？!?\.]?/g) ?? []
-  const summary = sentenceMatch.slice(0, 3).join(" ").slice(0, 220)
+  const tags = normalizeSnippetKeywords("", [], normalized)
 
-  const rawTokens = normalized
+  return {
+    summary: tags.join("，") || normalized.slice(0, 36),
+    tags
+  }
+}
+
+const snippetKeywordStopWords = new Set([
+  "this",
+  "that",
+  "with",
+  "from",
+  "have",
+  "will",
+  "about",
+  "your",
+  "their",
+  "would",
+  "could",
+  "should",
+  "https",
+  "http",
+  "www",
+  "com",
+  "the",
+  "and",
+  "for",
+  "into",
+  "onto",
+  "using",
+  "used",
+  "make",
+  "made",
+  "进行",
+  "通过",
+  "用于",
+  "可以",
+  "需要",
+  "应该",
+  "这个",
+  "那个",
+  "这些",
+  "那些",
+  "我们",
+  "你们",
+  "他们",
+  "本文",
+  "页面",
+  "内容",
+  "段落",
+  "分析",
+  "总结",
+  "关键词",
+  "说明",
+  "相关",
+  "主要"
+])
+
+const keywordSplitPattern = /[，,、；;。.!?\n\r\t\s]+/
+
+function isLikelyNounKeyword(token: string): boolean {
+  if (token.length < 2 || token.length > 24) {
+    return false
+  }
+
+  if (/^\d+$/.test(token)) {
+    return false
+  }
+
+  const normalized = token.toLowerCase()
+  if (snippetKeywordStopWords.has(normalized)) {
+    return false
+  }
+
+  if (/^(is|are|was|were|be|been|being|do|does|did|can|may|must|should)$/i.test(token)) {
+    return false
+  }
+
+  return /[\p{L}\p{N}]/u.test(token)
+}
+
+function extractKeywordsFromText(text: string): string[] {
+  const normalized = text
     .toLowerCase()
     .replace(/[^\p{L}\p{N}\s]/gu, " ")
     .split(/\s+/)
-    .filter((token) => token.length >= 3)
-
-  const stopWords = new Set([
-    "this",
-    "that",
-    "with",
-    "from",
-    "have",
-    "will",
-    "about",
-    "your",
-    "their",
-    "would",
-    "could",
-    "should",
-    "https",
-    "http",
-    "www",
-    "com"
-  ])
+    .map((item) => item.trim())
+    .filter(isLikelyNounKeyword)
 
   const scores = new Map<string, number>()
-  rawTokens.forEach((token) => {
-    if (stopWords.has(token)) {
-      return
-    }
+  normalized.forEach((token) => {
     scores.set(token, (scores.get(token) ?? 0) + 1)
   })
 
-  const tags = Array.from(scores.entries())
+  const wordKeywords = Array.from(scores.entries())
     .sort((a, b) => b[1] - a[1])
-    .slice(0, 5)
     .map(([token]) => token)
 
-  return {
-    summary: summary || normalized.slice(0, 180),
-    tags
-  }
+  const cjkPhrases = (text.match(/[\p{Script=Han}]{2,8}/gu) ?? [])
+    .map((item) => item.trim())
+    .filter(isLikelyNounKeyword)
+
+  return Array.from(new Set([...cjkPhrases, ...wordKeywords]))
+}
+
+function normalizeSnippetKeywords(
+  summary?: string,
+  tags?: string[],
+  sourceText = ""
+): string[] {
+  const fromSummary = (summary || "")
+    .split(keywordSplitPattern)
+    .map((item) => item.trim())
+    .filter(isLikelyNounKeyword)
+
+  const fromTags = (tags ?? [])
+    .flatMap((item) => item.split(keywordSplitPattern))
+    .map((item) => item.trim())
+    .filter(isLikelyNounKeyword)
+
+  const fallbackKeywords = extractKeywordsFromText(sourceText)
+
+  const merged = Array.from(new Set([...fromTags, ...fromSummary, ...fallbackKeywords]))
+
+  const resolved = merged.slice(0, 8)
+  return resolved.length >= 4 ? resolved : fallbackKeywords.slice(0, 8)
 }
 
 export const analyzeSnippetContent = async (
@@ -220,11 +302,11 @@ export const analyzeSnippetContent = async (
         {
           role: "system",
           content:
-            "你是网页内容分析助手。请输出 JSON：{summary: string, tags: string[]}，summary 用 2-3 句中文，tags 给 3-5 个关键词。"
+            "你是网页片段关键词提炼助手。请输出 JSON：{summary: string, tags: string[]}。summary 只允许 3-6 个关键词，用中文逗号分隔；tags 输出 3-6 个关键词。严禁输出完整句子和解释。"
         },
         {
           role: "user",
-          content: `请分析这段文本：\n${text.slice(0, 2200)}`
+          content: `请提炼这段文本的关键词：\n${text.slice(0, 2200)}`
         }
       ]
     })
@@ -234,13 +316,12 @@ export const analyzeSnippetContent = async (
       tags?: string[]
     }
 
-    const summary = parsed.summary?.trim()
-    const tags = (parsed.tags ?? []).filter(Boolean).slice(0, 5)
+    const keywords = normalizeSnippetKeywords(parsed.summary, parsed.tags, text)
 
-    if (summary) {
+    if (keywords.length > 0) {
       return {
-        summary,
-        tags
+        summary: keywords.join("，"),
+        tags: keywords.slice(0, 6)
       }
     }
   } catch {
@@ -324,13 +405,14 @@ export async function extractAiRecommendations(
 
 function buildDigestPrompt(page: PageContext, content: string, prompt?: string) {
   return [
-    "请把这个网页当作博客文章来处理，抽取成便于后续给 AI 使用的中文材料。",
+    "请把这个网页压缩为关键词结果，便于后续模型快速消费。",
     "输出要求：",
-    "1. 先给出基础信息，尽量覆盖标题、作者、日期、网址、站点、描述。",
-    "2. 然后给出“文章关键信息抓取”，覆盖全文关键论点、结构、结论、重要事实和示例。",
-    "3. 不要写与原文无关的推测；没有的信息直接写“未识别”。",
-    "4. 输出纯文本，层次清晰，适合继续喂给模型。",
-    prompt?.trim() ? `5. 额外用户要求：${prompt.trim()}` : ""
+    "1. 仅输出关键词，不要完整句子，不要解释，不要分段总结。",
+    "2. 总数控制在 6-12 个关键词。",
+    "3. 关键词覆盖：主题、核心观点、关键实体、方法或结论。",
+    "4. 使用中文逗号分隔，输出单行纯文本。",
+    "5. 缺失信息可省略，严禁用“未识别”补位。",
+    prompt?.trim() ? `6. 额外用户要求：${prompt.trim()}` : ""
   ]
     .filter(Boolean)
     .join("\n")
@@ -358,24 +440,80 @@ function buildHeuristicDigest(payload: PageDigestRequest): string {
     .trim()
     .slice(0, 12000)
 
-  const sections = [
-    "基础信息",
-    `- 标题：${page.title || "未识别"}`,
-    `- 作者：${page.author || "未识别"}`,
-    `- 日期：${page.publishedAt || "未识别"}`,
-    `- 网址：${page.url || "未识别"}`,
-    `- 站点：${page.siteName || page.domain || "未识别"}`,
-    `- 描述：${page.description || "未识别"}`,
-    "",
-    "文章关键信息抓取",
-    normalizedContent || page.summary || "未抓取到足够正文。"
+  const keywordParts = [
+    page.title,
+    page.author,
+    page.siteName,
+    page.domain,
+    page.description,
+    page.summary,
+    normalizedContent
   ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+
+  const stopWords = new Set([
+    "the",
+    "and",
+    "for",
+    "with",
+    "that",
+    "this",
+    "from",
+    "you",
+    "your",
+    "are",
+    "was",
+    "were",
+    "have",
+    "has",
+    "http",
+    "https",
+    "www",
+    "com",
+    "cn",
+    "html",
+    "文章",
+    "页面",
+    "内容",
+    "当前",
+    "可以",
+    "以及",
+    "一个",
+    "我们"
+  ])
+
+  const freq = new Map<string, number>()
+  keywordParts
+    .split(/\s+/)
+    .map((token) => token.trim())
+    .filter((token) => token.length >= 2 && !stopWords.has(token))
+    .forEach((token) => {
+      freq.set(token, (freq.get(token) ?? 0) + 1)
+    })
+
+  const seedKeywords = [
+    page.title,
+    page.author,
+    page.siteName || page.domain,
+    page.description
+  ]
+    .filter((item): item is string => Boolean(item?.trim()))
+    .map((item) => item.trim())
+
+  const freqKeywords = Array.from(freq.entries())
+    .sort((a, b) => b[1] - a[1])
+    .map(([token]) => token)
+
+  const keywords = Array.from(new Set([...seedKeywords, ...freqKeywords])).slice(0, 10)
 
   if (payload.prompt?.trim()) {
-    sections.push("", "用户补充提示", payload.prompt.trim())
+    keywords.push(payload.prompt.trim())
   }
 
-  return sections.join("\n")
+  return keywords.slice(0, 12).join("，")
 }
 
 export async function summarizePageContent(
@@ -408,7 +546,7 @@ export async function summarizePageContent(
         {
           role: "system",
           content:
-            "你是网页内容整理助手。请将页面整理成 AI 易读、信息密度高、结构清晰的中文纯文本。"
+            "你是网页关键词提炼助手。仅输出关键词，不输出句子、解释、标题或编号。"
         },
         {
           role: "user",

@@ -6,6 +6,8 @@ import {
 import { tokenize, unique } from "~/src/sdk/text"
 import type {
   AiModelProfile,
+  ExperimentEvent,
+  RecordExperimentEventPayload,
   CapturedSnippet,
   ExportSnapshot,
   ImportSnapshotResult,
@@ -191,6 +193,9 @@ export async function importSnapshotData(
     ? snapshot.knowledge.slice(0, 300)
     : []
   const drafts = Array.isArray(snapshot.drafts) ? snapshot.drafts : []
+  const analytics = Array.isArray(snapshot.analytics)
+    ? snapshot.analytics.slice(0, 1000)
+    : []
   const draftMap = Object.fromEntries(
     drafts
       .filter((draft) => typeof draft?.url === "string" && draft.url.trim())
@@ -208,6 +213,7 @@ export async function importSnapshotData(
   await chrome.storage.local.set({
     [STORAGE_KEYS.settings]: normalizedSettings,
     [STORAGE_KEYS.knowledge]: knowledge,
+    [STORAGE_KEYS.analytics]: analytics,
     [STORAGE_KEYS.drafts]: draftMap,
     [STORAGE_KEYS.collections]: collections
   })
@@ -217,12 +223,17 @@ export async function importSnapshotData(
     knowledgeCount: knowledge.length,
     draftCount: Object.keys(draftMap).length,
     collectionFolderCount: collections.folders.length,
-    collectionItemCount: collections.items.length
+    collectionItemCount: collections.items.length,
+    analyticsCount: analytics.length
   }
 }
 
 export async function getKnowledgeRecords(): Promise<KnowledgeRecord[]> {
   return getLocal<KnowledgeRecord[]>(STORAGE_KEYS.knowledge, [])
+}
+
+export async function getExperimentEvents(): Promise<ExperimentEvent[]> {
+  return getLocal<ExperimentEvent[]>(STORAGE_KEYS.analytics, [])
 }
 
 export async function getSnippetCollections(): Promise<SnippetCollectionState> {
@@ -393,6 +404,43 @@ export async function pushKnowledgeRecord(record: KnowledgeRecord) {
   await chrome.storage.local.set({
     [STORAGE_KEYS.knowledge]: next
   })
+}
+
+export async function recordExperimentEvent(
+  payload: RecordExperimentEventPayload
+): Promise<ExperimentEvent[]> {
+  const current = await getExperimentEvents()
+  const event: ExperimentEvent = {
+    id: `event-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    createdAt: new Date().toISOString(),
+    condition: payload.condition,
+    source: payload.source,
+    pageTitle: payload.pageTitle?.trim(),
+    url: payload.url?.trim(),
+    domain: payload.domain?.trim(),
+    folderPath: payload.folderPath?.trim(),
+    pageType: payload.pageType ?? "unknown",
+    steps: Math.max(0, payload.steps),
+    latencyMs: Math.max(0, payload.latencyMs),
+    suggestionCount: Math.max(0, payload.suggestionCount ?? 0),
+    selectedRank: payload.selectedRank,
+    top1Accepted: Boolean(payload.top1Accepted),
+    top3Covered: Boolean(payload.top3Covered),
+    recommendedPaths: (payload.recommendedPaths ?? [])
+      .map((item) => item.trim())
+      .filter(Boolean)
+      .slice(0, 5),
+    explanationSatisfaction: payload.explanationSatisfaction,
+    interventionSatisfaction: payload.interventionSatisfaction,
+    notes: payload.notes?.trim()
+  }
+
+  const next = [event, ...current].slice(0, 1000)
+  await chrome.storage.local.set({
+    [STORAGE_KEYS.analytics]: next
+  })
+
+  return next
 }
 
 export async function getRecommendationFeedback(): Promise<

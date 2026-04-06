@@ -12,6 +12,7 @@ import type {
   CreateCollectionFolderPayload,
   DeleteCollectionFolderPayload,
   DeleteCollectionItemPayload,
+  ExperimentEvent,
   ExportSnapshot,
   HistoryRecommendationItem,
   ImportSnapshotResult,
@@ -21,6 +22,7 @@ import type {
   PageDigestResult,
   RecommendationInput,
   RecommendationResult,
+  RecordExperimentEventPayload,
   SegmentSelectionResult,
   SnippetCollectionState,
   SmartFavoritesSettings,
@@ -177,6 +179,19 @@ export class SmartFavoritesSDK {
   async getKnowledgeRecords() {
     return sendRuntimeMessage<KnowledgeRecord[]>(
       "bookmarks-collector/get-knowledge-records"
+    )
+  }
+
+  async getExperimentEvents() {
+    return sendRuntimeMessage<ExperimentEvent[]>(
+      "bookmarks-collector/get-experiment-events"
+    )
+  }
+
+  async recordExperimentEvent(payload: RecordExperimentEventPayload) {
+    return sendRuntimeMessage<ExperimentEvent[]>(
+      "bookmarks-collector/record-experiment-event",
+      payload
     )
   }
 
