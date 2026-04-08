@@ -1,20 +1,15 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue"
 
-import { buildAnalyticsSummary } from "../sdk/analytics"
 import { SmartFavoritesSDK } from "../sdk/client"
 import { getProviderConfigNotice, resolveProvider } from "../sdk/provider"
 import {
   DEFAULT_PROMPT_TEMPLATE,
-  DEFAULT_SYSTEM_PROMPT,
-  GITHUB_REPO_URL
+  DEFAULT_SYSTEM_PROMPT
 } from "../sdk/constants"
 import type {
   AiModelProfile,
   BookmarkMoveDecision,
-  ExperimentCondition,
-  ExperimentEvent,
-  ExperimentPageType,
   ExportSnapshot,
   HistoryRecommendationItem,
   KnowledgeRecord,
@@ -32,20 +27,48 @@ import HistoryItemCard from "./HistoryItemCard.vue"
 
 const sdk = new SmartFavoritesSDK()
 
+const resolveTabFromHash = () => {
+  if (location.hash === "#history") {
+    return "history" as const
+  }
+
+  if (location.hash === "#knowledge") {
+    return "knowledge" as const
+  }
+
+  return "settings" as const
+}
+
+const buildDistribution = (entries: string[], limit = 8) => {
+  const total = entries.length
+  if (total === 0) {
+    return []
+  }
+
+  const counts = new Map<string, number>()
+  for (const entry of entries) {
+    const normalized = entry.trim()
+    if (!normalized) {
+      continue
+    }
+
+    counts.set(normalized, (counts.get(normalized) ?? 0) + 1)
+  }
+
+  return [...counts.entries()]
+    .sort((left, right) => right[1] - left[1])
+    .slice(0, limit)
+    .map(([label, count]) => ({
+      label,
+      count,
+      ratio: count / total
+    }))
+}
+
 const importInput = ref<HTMLInputElement | null>(null)
 const settings = ref<SmartFavoritesSettings | null>(null)
 const status = ref("正在加载设置…")
-const tab = ref<"quickstart" | "settings" | "history" | "knowledge" | "analytics">(
-  location.hash === "#quickstart"
-    ? "quickstart"
-    : location.hash === "#history"
-      ? "history"
-      : location.hash === "#knowledge"
-        ? "knowledge"
-        : location.hash === "#analytics"
-          ? "analytics"
-          : "settings"
-)
+const tab = ref<"settings" | "history" | "knowledge">(resolveTabFromHash())
 const historyItems = ref<HistoryRecommendationItem[]>([])
 const selectedIds = ref<string[]>([])
 const historyStatus = ref("正在加载历史书签推荐…")
@@ -55,8 +78,6 @@ const collections = ref<SnippetCollectionState>({
 })
 const knowledgeRecords = ref<KnowledgeRecord[]>([])
 const knowledgeStatus = ref("正在加载知识记录…")
-const experimentEvents = ref<ExperimentEvent[]>([])
-const analyticsStatus = ref("正在加载实验统计…")
 const knowledgeQuery = ref("")
 const collectionsStatus = ref("正在加载收藏夹…")
 const showApiKey = ref(false)
@@ -71,43 +92,6 @@ const editingItemId = ref("")
 const editingItemTitle = ref("")
 const editingItemText = ref("")
 const historyRecommendationStartedAt = ref<number | null>(null)
-const manualCondition = ref<ExperimentCondition>("manual")
-const manualPageType = ref<ExperimentPageType>("unknown")
-const manualSteps = ref("0")
-const manualLatencyMs = ref("0")
-const manualTop1Accepted = ref(false)
-const manualTop3Covered = ref(false)
-const manualExplanationSatisfaction = ref("")
-const manualInterventionSatisfaction = ref("")
-const manualNotes = ref("")
-
-const quickStartSections = [
-  {
-    title: "1. 先配置模型",
-    body:
-      "进入“模型配置”，填写 Base URL、API Key 和模型名。当前激活模型配置完整后，页面 AI 整理和智能推荐才会使用模型能力。"
-  },
-  {
-    title: "2. 在网页里抓取知识",
-    body:
-      "点击页面右侧上方悬浮球，打开“页面知识抓取”面板。它会像浏览器侧边工具一样挤压页面宽度，不再遮挡正文；你可以抓取选中文本，也可以开启框选模式。"
-  },
-  {
-    title: "3. 用 AI 整理页面",
-    body:
-      "点击下方悬浮球打开“AI 页面整理”弹窗。这里适合补全文章元信息、调整正文、输入额外提示词，再执行一键整理。"
-  },
-  {
-    title: "4. 管理抓取结果与历史书签",
-    body:
-      "“历史整理”页用于管理抓取片段、收藏夹和历史书签推荐；“知识笔记”页用于回看沉淀下来的知识记录。"
-  },
-  {
-    title: "5. 导入与导出配置",
-    body:
-      "“模型配置”页现在同时支持导出和导入备份。导入会恢复扩展内部的设置、知识记录、页面草稿和内容收藏，但不会直接改写浏览器已有书签结构。"
-  }
-]
 
 const selectedDecisions = computed<BookmarkMoveDecision[]>(() =>
   historyItems.value
@@ -182,10 +166,6 @@ const activeProviderNotice = computed(() => {
   return getProviderConfigNotice(resolveProvider(settings.value))
 })
 
-const analyticsSummary = computed(() =>
-  buildAnalyticsSummary(experimentEvents.value, knowledgeRecords.value)
-)
-
 const knowledgeInsightCards = computed(() => {
   const tagCount = new Set(
     knowledgeRecords.value.flatMap((record) => record.tags)
@@ -206,24 +186,24 @@ const knowledgeInsightCards = computed(() => {
   ]
 })
 
+const knowledgeFolderDistribution = computed(() =>
+  buildDistribution(
+    knowledgeRecords.value.map((record) => record.folderPath || "未分类")
+  )
+)
+
+const knowledgeTagDistribution = computed(() =>
+  buildDistribution(knowledgeRecords.value.flatMap((record) => record.tags))
+)
+
 onMounted(() => {
   void loadSettings()
   void refreshHistory()
   void loadCollections()
   void loadKnowledgeRecords()
-  void loadExperimentEvents()
 
   const onHashChange = () => {
-    tab.value =
-      location.hash === "#quickstart"
-        ? "quickstart"
-        : location.hash === "#history"
-          ? "history"
-          : location.hash === "#knowledge"
-            ? "knowledge"
-            : location.hash === "#analytics"
-              ? "analytics"
-            : "settings"
+    tab.value = resolveTabFromHash()
   }
 
   window.addEventListener("hashchange", onHashChange)
@@ -279,14 +259,6 @@ const loadKnowledgeRecords = async () => {
       : "当前还没有知识记录，执行书签确认后会在这里沉淀学习轨迹。"
 }
 
-const loadExperimentEvents = async () => {
-  experimentEvents.value = await sdk.getExperimentEvents()
-  analyticsStatus.value =
-    experimentEvents.value.length > 0
-      ? `已加载 ${experimentEvents.value.length} 条实验事件。`
-      : "当前还没有实验事件，可先执行一次推荐确认或手动补录。"
-}
-
 const saveSettings = async () => {
   if (!settings.value) {
     return
@@ -334,8 +306,7 @@ const importBackup = async (event: Event) => {
       loadSettings(),
       loadCollections(),
       loadKnowledgeRecords(),
-      refreshHistory(),
-      loadExperimentEvents()
+      refreshHistory()
     ])
     status.value =
       `已导入备份：${result.knowledgeCount} 条知识记录，` +
@@ -391,10 +362,10 @@ const applySelected = async () => {
         top3Covered: item.recommendation.suggestions.length > 0,
         recommendedPaths: item.recommendation.suggestions.map((suggestion) => suggestion.path)
       })
-    )
+  )
   )
   historyStatus.value = `已迁移 ${result.moved} 条书签。`
-  await Promise.all([refreshHistory(), loadExperimentEvents(), loadKnowledgeRecords()])
+  await Promise.all([refreshHistory(), loadKnowledgeRecords()])
 }
 
 const toggleSelected = (id: string) => {
@@ -403,20 +374,14 @@ const toggleSelected = (id: string) => {
     : [...selectedIds.value, id]
 }
 
-const switchTab = (
-  next: "quickstart" | "settings" | "history" | "knowledge" | "analytics"
-) => {
+const switchTab = (next: "settings" | "history" | "knowledge") => {
   tab.value = next
   location.hash =
-    next === "quickstart"
-      ? "#quickstart"
-      : next === "history"
-        ? "#history"
-        : next === "knowledge"
-          ? "#knowledge"
-          : next === "analytics"
-            ? "#analytics"
-          : ""
+    next === "history"
+      ? "#history"
+      : next === "knowledge"
+        ? "#knowledge"
+        : ""
 }
 
 const readInputValue = (event: Event) => {
@@ -578,10 +543,6 @@ const onStoreKnowledgeChange = (event: Event) => {
   })
 }
 
-const openGithub = () => {
-  window.open(GITHUB_REPO_URL, "_blank", "noopener,noreferrer")
-}
-
 const resetFolderForm = () => {
   editingFolderId.value = ""
   folderNameInput.value = ""
@@ -737,45 +698,9 @@ const formatKnowledgeTime = (value: string) => {
 
 const formatPercent = (value: number) => `${(value * 100).toFixed(1)}%`
 
-const formatDuration = (value: number) =>
-  value >= 1000 ? `${(value / 1000).toFixed(2)} s` : `${Math.round(value)} ms`
-
 const distributionStyle = (ratio: number) => ({
   width: `${Math.max(ratio * 100, 4)}%`
 })
-
-const saveManualExperimentRecord = async () => {
-  const explanationValue = Number(manualExplanationSatisfaction.value)
-  const interventionValue = Number(manualInterventionSatisfaction.value)
-
-  await sdk.recordExperimentEvent({
-    condition: manualCondition.value,
-    source: "manual",
-    pageType: manualPageType.value,
-    steps: Number(manualSteps.value) || 0,
-    latencyMs: Number(manualLatencyMs.value) || 0,
-    suggestionCount: manualCondition.value === "manual" ? 0 : 3,
-    top1Accepted: manualTop1Accepted.value,
-    top3Covered: manualTop3Covered.value,
-    explanationSatisfaction: Number.isNaN(explanationValue)
-      ? undefined
-      : explanationValue,
-    interventionSatisfaction: Number.isNaN(interventionValue)
-      ? undefined
-      : interventionValue,
-    notes: manualNotes.value
-  })
-
-  manualSteps.value = "0"
-  manualLatencyMs.value = "0"
-  manualTop1Accepted.value = false
-  manualTop3Covered.value = false
-  manualExplanationSatisfaction.value = ""
-  manualInterventionSatisfaction.value = ""
-  manualNotes.value = ""
-  await loadExperimentEvents()
-  analyticsStatus.value = "已补录实验事件。"
-}
 </script>
 
 <template>
@@ -789,15 +714,9 @@ const saveManualExperimentRecord = async () => {
         @change="importBackup" />
       <div>
         <div class="eyebrow">Workspace</div>
-        <div class="title">插件管理台</div>
+        <div class="title">整理工作台</div>
       </div>
       <div class="tab-actions">
-        <BaseButton
-          :variant="tab === 'quickstart' ? 'primary' : 'secondary'"
-          @click="switchTab('quickstart')">
-          <font-awesome-icon icon="book-open" />
-          快速开始
-        </BaseButton>
         <BaseButton
           :variant="tab === 'settings' ? 'primary' : 'secondary'"
           @click="switchTab('settings')">
@@ -808,23 +727,13 @@ const saveManualExperimentRecord = async () => {
           :variant="tab === 'history' ? 'primary' : 'secondary'"
           @click="switchTab('history')">
           <font-awesome-icon icon="bookmark" />
-          历史整理
+          内容整理
         </BaseButton>
         <BaseButton
           :variant="tab === 'knowledge' ? 'primary' : 'secondary'"
           @click="switchTab('knowledge')">
           <font-awesome-icon icon="book-open" />
           知识笔记
-        </BaseButton>
-        <BaseButton
-          :variant="tab === 'analytics' ? 'primary' : 'secondary'"
-          @click="switchTab('analytics')">
-          <font-awesome-icon icon="vector-square" />
-          数据看板
-        </BaseButton>
-        <BaseButton @click="openGithub">
-          <font-awesome-icon icon="up-right-from-square" />
-          GitHub
         </BaseButton>
       </div>
     </BaseCard>
@@ -833,27 +742,20 @@ const saveManualExperimentRecord = async () => {
       <BaseCard>{{ status }}</BaseCard>
     </template>
 
-    <template v-else-if="tab === 'quickstart'">
+    <template v-else-if="tab === 'settings'">
       <BaseCard class="quickstart-hero">
         <SectionHeader
           compact
-          title="快速开始"
-          subtitle="先把关键路径走通：模型配置、页面抓取、AI 整理、历史整理和备份导入导出。" />
+          title="使用路径"
+          subtitle="这个版本把主线收敛成三件事：先配置模型，再在网页里抓取和整理，最后回来看沉淀结果。" />
         <div class="status">
-          {{ activeProviderNotice || "当前模型配置完整，可以直接开始使用页面抓取和 AI 整理。" }}
+          {{ activeProviderNotice || "当前模型配置完整，可以直接开始使用页面抓取、AI 整理和书签归档。" }}
+        </div>
+        <div class="quickstart-copy">
+          管理台保留三个入口：模型配置负责接通 AI，内容整理负责管理抓取片段和高级书签迁移，知识笔记负责回看已经沉淀下来的记录。
         </div>
       </BaseCard>
 
-      <BaseCard
-        v-for="section in quickStartSections"
-        :key="section.title"
-        class="quickstart-card">
-        <div class="quickstart-title">{{ section.title }}</div>
-        <div class="quickstart-copy">{{ section.body }}</div>
-      </BaseCard>
-    </template>
-
-    <template v-else-if="tab === 'settings'">
       <BaseCard>
         <div class="row wrap">
           <SectionHeader
@@ -1018,10 +920,6 @@ const saveManualExperimentRecord = async () => {
             <font-awesome-icon icon="folder-open" />
             导入备份
           </BaseButton>
-          <BaseButton @click="openGithub">
-            <font-awesome-icon icon="up-right-from-square" />
-            GitHub
-          </BaseButton>
           <BaseButton variant="primary" @click="saveSettings">
             <font-awesome-icon icon="floppy-disk" />
             保存配置
@@ -1033,14 +931,10 @@ const saveManualExperimentRecord = async () => {
     <template v-else-if="tab === 'history'">
       <BaseCard class="history-header">
         <div>
-          <SectionHeader compact title="历史整理" />
+          <SectionHeader compact title="内容整理" />
           <div class="status">{{ collectionsStatus }}</div>
         </div>
         <div class="button-row">
-          <BaseButton @click="openGithub">
-            <font-awesome-icon icon="up-right-from-square" />
-            GitHub
-          </BaseButton>
           <BaseButton @click="loadCollections">
             <font-awesome-icon icon="arrows-rotate" />
             刷新收藏夹
@@ -1201,8 +1095,10 @@ const saveManualExperimentRecord = async () => {
       <BaseCard>
         <div class="row wrap">
           <div>
-            <SectionHeader compact title="历史书签批量整理" />
-            <div class="status">{{ historyStatus }}</div>
+            <SectionHeader compact title="历史书签整理（高级）" />
+            <div class="status">
+              {{ historyStatus }} 这部分会调整已有书签目录，适合在确认推荐结果后再批量处理。
+            </div>
           </div>
         </div>
         <div v-if="historyItems.length === 0" class="soft-empty">
@@ -1250,7 +1146,7 @@ const saveManualExperimentRecord = async () => {
           <div>
             <div class="quickstart-title">目录分布</div>
             <div
-              v-for="item in analyticsSummary.folderDistribution"
+              v-for="item in knowledgeFolderDistribution"
               :key="item.label"
               class="distribution-item">
               <div class="distribution-head">
@@ -1265,7 +1161,7 @@ const saveManualExperimentRecord = async () => {
           <div>
             <div class="quickstart-title">标签频率</div>
             <div
-              v-for="item in analyticsSummary.tagDistribution"
+              v-for="item in knowledgeTagDistribution"
               :key="item.label"
               class="distribution-item">
               <div class="distribution-head">
@@ -1321,124 +1217,6 @@ const saveManualExperimentRecord = async () => {
         <div v-if="record.selectedText" class="knowledge-block">
           <div class="knowledge-label">选中片段</div>
           <div class="knowledge-quote">{{ record.selectedText }}</div>
-        </div>
-      </BaseCard>
-    </template>
-    <template v-else>
-      <BaseCard class="history-header">
-        <div>
-          <SectionHeader compact title="数据看板" />
-          <div class="status">{{ analyticsStatus }}</div>
-        </div>
-        <div class="button-row">
-          <BaseButton @click="loadExperimentEvents">
-            <font-awesome-icon icon="arrows-rotate" />
-            刷新统计
-          </BaseButton>
-        </div>
-      </BaseCard>
-
-      <BaseCard>
-        <div class="metrics-grid compact-grid">
-          <div class="metric-panel">
-            <div class="metric-label">实验事件</div>
-            <div class="metric-value">{{ analyticsSummary.totalEvents }}</div>
-          </div>
-          <div class="metric-panel">
-            <div class="metric-label">知识记录</div>
-            <div class="metric-value">{{ analyticsSummary.totalKnowledgeRecords }}</div>
-          </div>
-          <div class="metric-panel">
-            <div class="metric-label">唯一页面</div>
-            <div class="metric-value">{{ analyticsSummary.uniquePages }}</div>
-          </div>
-        </div>
-      </BaseCard>
-
-      <BaseCard>
-        <div class="table-scroll">
-          <table class="stats-table">
-            <thead>
-              <tr>
-                <th>条件</th>
-                <th>任务数</th>
-                <th>Top-1</th>
-                <th>Top-3</th>
-                <th>平均步数</th>
-                <th>平均时延</th>
-                <th>解释满意度</th>
-                <th>可干预满意度</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="row in analyticsSummary.conditionRows" :key="row.condition">
-                <td>{{ row.condition }}</td>
-                <td>{{ row.total }}</td>
-                <td>{{ formatPercent(row.top1Rate) }}</td>
-                <td>{{ formatPercent(row.top3Rate) }}</td>
-                <td>{{ row.avgSteps.toFixed(2) }}</td>
-                <td>{{ formatDuration(row.avgLatencyMs) }}</td>
-                <td>{{ row.avgExplanationSatisfaction?.toFixed(2) || "-" }}</td>
-                <td>{{ row.avgInterventionSatisfaction?.toFixed(2) || "-" }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </BaseCard>
-
-      <BaseCard>
-        <div class="analytics-columns">
-          <div class="folder-form">
-            <div class="quickstart-title">实验补录</div>
-            <select v-model="manualCondition" class="field">
-              <option value="manual">manual</option>
-              <option value="rule">rule</option>
-              <option value="enhanced">enhanced</option>
-            </select>
-            <select v-model="manualPageType" class="field">
-              <option value="unknown">unknown</option>
-              <option value="structured">structured</option>
-              <option value="semi-structured">semi-structured</option>
-              <option value="high-noise">high-noise</option>
-            </select>
-            <input v-model="manualSteps" class="field" placeholder="整理步数" />
-            <input v-model="manualLatencyMs" class="field" placeholder="处理时延 ms" />
-            <input v-model="manualExplanationSatisfaction" class="field" placeholder="解释满意度 1-5" />
-            <input v-model="manualInterventionSatisfaction" class="field" placeholder="可干预满意度 1-5" />
-            <label class="check-item">
-              <input v-model="manualTop1Accepted" type="checkbox" />
-              <span>Top-1 被采纳</span>
-            </label>
-            <label class="check-item">
-              <input v-model="manualTop3Covered" type="checkbox" />
-              <span>Top-3 覆盖命中</span>
-            </label>
-            <textarea v-model="manualNotes" class="field" rows="4" placeholder="参与者编号、任务编号或备注" />
-            <BaseButton variant="primary" @click="saveManualExperimentRecord">
-              <font-awesome-icon icon="floppy-disk" />
-              保存补录
-            </BaseButton>
-          </div>
-          <div>
-            <div class="quickstart-title">最近事件</div>
-            <div v-for="event in experimentEvents.slice(0, 10)" :key="event.id" class="event-card">
-              <div class="folder-item-top">
-                <div>
-                  <div class="folder-name">{{ event.pageTitle || "手工补录任务" }}</div>
-                  <div class="folder-desc">
-                    {{ event.condition }} / {{ event.source }} / {{ formatKnowledgeTime(event.createdAt) }}
-                  </div>
-                </div>
-                <span class="tag-chip">{{ event.pageType || "unknown" }}</span>
-              </div>
-              <div class="knowledge-meta">
-                <span>步数：{{ event.steps }}</span>
-                <span>时延：{{ formatDuration(event.latencyMs) }}</span>
-                <span>Top-1：{{ event.top1Accepted ? "是" : "否" }}</span>
-                <span>Top-3：{{ event.top3Covered ? "是" : "否" }}</span>
-              </div>
-            </div>
-          </div>
         </div>
       </BaseCard>
     </template>

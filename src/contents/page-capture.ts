@@ -57,6 +57,7 @@ type OverlayState = {
   articleAuthor: string
   articleDate: string
   articleContent: string
+  aiSummaryContent: string
   articleSegments: PageDigestSegment[]
   articleMode: "full" | "segments"
   aiPrompt: string
@@ -95,6 +96,7 @@ const state = reactive<OverlayState>({
   articleAuthor: "",
   articleDate: "",
   articleContent: "",
+  aiSummaryContent: "",
   articleSegments: [],
   articleMode: "full",
   aiPrompt: "",
@@ -154,6 +156,7 @@ const hydrateArticleFields = (page: PageContext) => {
   state.articleAuthor = page.author || ""
   state.articleDate = page.publishedAt || ""
   state.articleContent = articleContent
+  state.aiSummaryContent = ""
   state.articleSegments = articleSegments
   state.aiCharCount = articleContent.length
   state.aiTokenEstimate = estimateTokens(articleContent)
@@ -221,6 +224,23 @@ const analyzeSnippet = async (snippetId: string) => {
   )
 
   state.status = "该片段分析完成。"
+  renderOverlay()
+}
+
+const updateSnippetTags = async (snippetId: string, tags: string[]) => {
+  state.status = "正在保存标签…"
+  renderOverlay()
+
+  state.draft = await sendMessage<PageCaptureDraft>(
+    "bookmarks-collector/update-captured-snippet-tags",
+    {
+      url: location.href,
+      snippetId,
+      tags
+    }
+  )
+
+  state.status = "片段标签已更新。"
   renderOverlay()
 }
 
@@ -311,6 +331,9 @@ const renderOverlay = () => {
     onAnalyzeSnippet: (snippetId: string) => {
       void analyzeSnippet(snippetId)
     },
+    onSaveSnippetTags: (payload: { snippetId: string; tags: string[] }) => {
+      void updateSnippetTags(payload.snippetId, payload.tags)
+    },
     onAnalyzeAllSnippets: () => {
       void analyzeAllSnippets(false)
     },
@@ -322,12 +345,6 @@ const renderOverlay = () => {
     },
     onOpenHistory: () => {
       void openExtensionPage("tabs/manage.html#history")
-    },
-    onOpenQuickStart: () => {
-      void openExtensionPage("tabs/manage.html#quickstart")
-    },
-    onOpenGithub: () => {
-      window.open("https://github.com/dodolalorc/bookmarks-collector-ai", "_blank", "noopener,noreferrer")
     },
     onRefreshArticle: () => {
       hydrateArticleFields(getPageContext())
@@ -504,9 +521,7 @@ const summarizeArticle = async () => {
       providerId: state.aiModelId
     })
 
-    state.articleContent = result.content
-    state.aiCharCount = result.content.length
-    state.aiTokenEstimate = result.tokenEstimate
+    state.aiSummaryContent = result.content
     state.aiModelId = result.providerId
     state.aiModelLabel = result.modelLabel
     state.aiStatus = `已完成一键总结，当前使用模型：${result.modelLabel}`

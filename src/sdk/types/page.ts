@@ -28,6 +28,12 @@ export interface CapturedSnippet {
   analysisUpdatedAt?: string
 }
 
+export interface UpdateCapturedSnippetTagsPayload {
+  url: string
+  snippetId: string
+  tags: string[]
+}
+
 export interface PageCaptureDraft {
   url: string
   snippets: CapturedSnippet[]

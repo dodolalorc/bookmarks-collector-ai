@@ -2,7 +2,6 @@
 import { computed, onMounted, ref } from "vue"
 
 import { SmartFavoritesSDK } from "../sdk/client"
-import { GITHUB_REPO_URL } from "../sdk/constants"
 import { getProviderConfigNotice, resolveProvider } from "../sdk/provider"
 import type {
   BookmarkMutationResult,
@@ -294,8 +293,8 @@ const quickCapture = async () => {
   }
 }
 
-const openGithub = () => {
-  window.open(GITHUB_REPO_URL, "_blank", "noopener,noreferrer")
+const openWorkspace = async () => {
+  await sdk.openExtensionPage("tabs/manage.html")
 }
 </script>
 
@@ -306,13 +305,13 @@ const openGithub = () => {
         <div class="hero">
           <SectionHeader
             compact
-            eyebrow="Smart Favorites AI"
-            title="AI 智能书签分类助手"
-            subtitle="优先推荐，不自动替你改结构。你确认后，插件才会移动或创建书签。" />
+            eyebrow="Current Page"
+            title="当前页面归档"
+            subtitle="先理解当前页面，再推荐去向。你确认后，插件才会真正写入浏览器书签。" />
           <div class="hero-actions">
-            <BaseButton @click="openGithub">
-              <font-awesome-icon icon="up-right-from-square" />
-              GitHub
+            <BaseButton @click="openWorkspace">
+              <font-awesome-icon icon="gear" />
+              打开管理台
             </BaseButton>
             <BaseButton variant="primary" @click="refreshCapture">
               <font-awesome-icon icon="rotate-right" />

@@ -20,6 +20,7 @@ import type {
   MoveCollectionItemPayload,
   PageDigestRequest,
   PageDigestResult,
+  PageCaptureDraft,
   RecommendationInput,
   RecommendationResult,
   RecordExperimentEventPayload,
@@ -28,7 +29,8 @@ import type {
   SmartFavoritesSettings,
   UpdateCollectionFolderPayload,
   UpdateCollectionItemPayload,
-  UpdateActiveProviderPayload
+  UpdateActiveProviderPayload,
+  UpdateCapturedSnippetTagsPayload
 } from "~/src/sdk/types"
 
 async function sendRuntimeMessage<T>(type: string, payload?: unknown): Promise<T> {
@@ -191,6 +193,13 @@ export class SmartFavoritesSDK {
   async recordExperimentEvent(payload: RecordExperimentEventPayload) {
     return sendRuntimeMessage<ExperimentEvent[]>(
       "bookmarks-collector/record-experiment-event",
+      payload
+    )
+  }
+
+  async updateCapturedSnippetTags(payload: UpdateCapturedSnippetTagsPayload) {
+    return sendRuntimeMessage<PageCaptureDraft>(
+      "bookmarks-collector/update-captured-snippet-tags",
       payload
     )
   }

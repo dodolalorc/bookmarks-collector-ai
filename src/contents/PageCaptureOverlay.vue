@@ -23,6 +23,7 @@ type OverlayStateView = {
   articleAuthor: string
   articleDate: string
   articleContent: string
+  aiSummaryContent: string
   articleSegments: PageDigestSegment[]
   articleMode: "full" | "segments"
   aiPrompt: string
@@ -53,12 +54,11 @@ const emit = defineEmits<{
   toggleElementMode: []
   deleteSnippet: [snippetId: string]
   analyzeSnippet: [snippetId: string]
+  saveTags: [payload: { snippetId: string; tags: string[] }]
   analyzeAllSnippets: []
   reanalyzeAllSnippets: []
   openOptions: []
   openHistory: []
-  openQuickStart: []
-  openGithub: []
   refreshArticle: []
   updateArticleMeta: [
     payload: {
@@ -281,23 +281,18 @@ const onSegmentToggle = (segmentId: string, selected: boolean) => {
           :key="snippet.id"
           :snippet="snippet"
           @analyze="emit('analyzeSnippet', $event)"
+          @save-tags="emit('saveTags', $event)"
           @delete="emit('deleteSnippet', $event)" />
       </div>
 
       <div class="sidebar-footer">
-        <div class="footer-text">模型配置、历史整理和快速开始都在管理页里</div>
+        <div class="footer-text">模型配置和内容整理都在管理台里</div>
         <div class="footer-actions">
-          <button class="icon-button" title="快速开始" @click="emit('openQuickStart')">
-            <font-awesome-icon icon="book-open" />
-          </button>
           <button class="icon-button" title="模型配置" @click="emit('openOptions')">
             <font-awesome-icon icon="gear" />
           </button>
-          <button class="icon-button" title="历史整理" @click="emit('openHistory')">
+          <button class="icon-button" title="内容整理" @click="emit('openHistory')">
             <font-awesome-icon icon="bookmark" />
-          </button>
-          <button class="icon-button" title="GitHub" @click="emit('openGithub')">
-            <font-awesome-icon icon="up-right-from-square" />
           </button>
         </div>
       </div>
@@ -431,6 +426,18 @@ const onSegmentToggle = (segmentId: string, selected: boolean) => {
           </div>
         </div>
 
+        <div v-if="state.aiSummaryContent" class="field-wrap">
+          <div class="field-row">
+            <span class="field-label">AI 总结结果</span>
+            <span class="field-label field-label-muted">
+              保留原文，不覆盖正文输入区
+            </span>
+          </div>
+          <div class="summary-output">
+            {{ state.aiSummaryContent }}
+          </div>
+        </div>
+
         <div class="field-wrap">
           <span class="field-label">AI 提示语</span>
           <textarea
@@ -457,13 +464,13 @@ const onSegmentToggle = (segmentId: string, selected: boolean) => {
           </label>
 
           <div class="bar-actions">
-            <button class="chip" @click="emit('openQuickStart')">
-              <font-awesome-icon icon="book-open" />
-              快速开始
-            </button>
             <button class="chip" @click="emit('openOptions')">
               <font-awesome-icon icon="gear" />
               模型配置
+            </button>
+            <button class="chip" @click="emit('openHistory')">
+              <font-awesome-icon icon="bookmark" />
+              内容整理
             </button>
             <button
               class="chip chip-gradient"
@@ -740,6 +747,23 @@ const onSegmentToggle = (segmentId: string, selected: boolean) => {
 .chip-gradient {
   background: linear-gradient(135deg, #ff8ed8 0%, #8ad8ff 100%);
   color: #21304f;
+}
+
+.summary-output {
+  margin-top: 8px;
+  padding: 14px;
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(255, 248, 231, 0.96), rgba(255, 255, 255, 0.98));
+  border: 1px solid rgba(255, 198, 107, 0.28);
+  color: #33445f;
+  font-size: 13px;
+  line-height: 1.8;
+  white-space: pre-wrap;
+}
+
+.field-label-muted {
+  color: #7b88a4;
+  font-weight: 600;
 }
 
 .icon-button {

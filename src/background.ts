@@ -132,6 +132,14 @@ async function handleMessage(message: { type: string; payload?: unknown }) {
           snippetId: string
         }
       )
+    case "bookmarks-collector/update-captured-snippet-tags":
+      return handleUpdateCapturedSnippetTags(
+        message.payload as {
+          url: string
+          snippetId: string
+          tags: string[]
+        }
+      )
     case "bookmarks-collector/analyze-all-captured-snippets":
       return handleAnalyzeAllCapturedSnippets(
         message.payload as {
@@ -508,6 +516,23 @@ async function handleAnalyzeCapturedSnippet(payload: {
     ...snippet,
     analysisSummary: analysis.summary,
     analysisTags: analysis.tags,
+    analysisUpdatedAt: new Date().toISOString()
+  }))
+}
+
+async function handleUpdateCapturedSnippetTags(payload: {
+  url: string
+  snippetId: string
+  tags: string[]
+}): Promise<PageCaptureDraft> {
+  const nextTags = payload.tags
+    .map((tag) => tag.trim())
+    .filter(Boolean)
+    .slice(0, 12)
+
+  return updateCapturedSnippet(payload.url, payload.snippetId, (snippet) => ({
+    ...snippet,
+    analysisTags: nextTags,
     analysisUpdatedAt: new Date().toISOString()
   }))
 }

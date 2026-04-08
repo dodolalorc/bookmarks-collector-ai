@@ -1,14 +1,55 @@
 <script setup lang="ts">
+import { ref, watch } from "vue"
+
 import type { CapturedSnippet } from "../sdk/types"
 
-defineProps<{
+const props = defineProps<{
   snippet: CapturedSnippet
 }>()
 
-defineEmits<{
+const emit = defineEmits<{
   analyze: [snippetId: string]
   delete: [snippetId: string]
+  saveTags: [payload: { snippetId: string; tags: string[] }]
 }>()
+
+const isEditingTags = ref(false)
+const draftTags = ref("")
+
+watch(
+  () => props.snippet.analysisTags,
+  (tags) => {
+    if (!isEditingTags.value) {
+      draftTags.value = (tags ?? []).join(", ")
+    }
+  },
+  {
+    immediate: true
+  }
+)
+
+const startEditTags = () => {
+  isEditingTags.value = true
+  draftTags.value = (props.snippet.analysisTags ?? []).join(", ")
+}
+
+const cancelEditTags = () => {
+  isEditingTags.value = false
+  draftTags.value = (props.snippet.analysisTags ?? []).join(", ")
+}
+
+const saveTags = () => {
+  const tags = draftTags.value
+    .split(",")
+    .map((tag) => tag.trim())
+    .filter(Boolean)
+
+  emit("saveTags", {
+    snippetId: props.snippet.id,
+    tags
+  })
+  isEditingTags.value = false
+}
 </script>
 
 <template>
@@ -43,6 +84,31 @@ defineEmits<{
     <div class="snippet-text">{{ snippet.text.slice(0, 420) }}</div>
     <div v-if="snippet.analysisSummary" class="snippet-summary">
       {{ snippet.analysisSummary }}
+    </div>
+    <div class="snippet-tag-editor">
+      <div class="tag-editor-head">
+        <span class="tag-editor-label">关键标签</span>
+        <button
+          v-if="!isEditingTags"
+          class="snippet-edit"
+          @click="startEditTags">
+          编辑
+        </button>
+      </div>
+      <template v-if="isEditingTags">
+        <textarea
+          v-model="draftTags"
+          class="tag-editor-input"
+          rows="2"
+          placeholder="使用英文逗号分隔，例如：AI, 浏览器, 提示词" />
+        <div class="tag-editor-actions">
+          <button class="snippet-save" @click="saveTags">保存</button>
+          <button class="snippet-cancel" @click="cancelEditTags">取消</button>
+        </div>
+      </template>
+      <div v-else class="tag-editor-hint">
+        {{ snippet.analysisTags?.length ? "可手动补充、删减或重排标签。" : "暂无标签，可点击编辑手动补充。" }}
+      </div>
     </div>
   </div>
 </template>
@@ -100,23 +166,33 @@ defineEmits<{
 }
 
 .snippet-analyze,
-.snippet-delete {
+.snippet-delete,
+.snippet-edit,
+.snippet-save,
+.snippet-cancel {
   border: 0;
+  cursor: pointer;
+  font: inherit;
+}
+
+.snippet-analyze {
   border-radius: 999px;
   width: 30px;
   height: 30px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  cursor: pointer;
-}
-
-.snippet-analyze {
   background: #eef4ff;
   color: #5d6f98;
 }
 
 .snippet-delete {
+  border-radius: 999px;
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   background: #ffebee;
   color: #cf263f;
 }
@@ -143,5 +219,68 @@ defineEmits<{
   color: #324a72;
   font-size: 13px;
   line-height: 1.6;
+}
+
+.snippet-tag-editor {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(112, 135, 168, 0.12);
+}
+
+.tag-editor-head,
+.tag-editor-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.tag-editor-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #51678f;
+}
+
+.tag-editor-input {
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid #d3ddef;
+  background: #fff;
+  color: #25324d;
+  font: inherit;
+  resize: vertical;
+}
+
+.snippet-edit,
+.snippet-save,
+.snippet-cancel {
+  padding: 6px 10px;
+  border-radius: 999px;
+}
+
+.snippet-edit,
+.snippet-cancel {
+  background: #eef4ff;
+  color: #5d6f98;
+}
+
+.snippet-save {
+  background: #dff3e8;
+  color: #236548;
+}
+
+.tag-editor-actions {
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+.tag-editor-hint {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #7f8ca6;
 }
 </style>
