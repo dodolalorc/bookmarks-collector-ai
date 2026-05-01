@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { ref, watch } from "vue"
 
 import type { CapturedSnippet } from "../sdk/types"
@@ -107,7 +107,11 @@ const saveTags = () => {
         </div>
       </template>
       <div v-else class="tag-editor-hint">
-        {{ snippet.analysisTags?.length ? "可手动补充、删减或重排标签。" : "暂无标签，可点击编辑手动补充。" }}
+        {{
+          snippet.analysisTags?.length
+            ? "可手动补充、删减或重排标签。"
+            : "暂无标签，可点击编辑手动补充。"
+        }}
       </div>
     </div>
   </div>
@@ -118,7 +122,7 @@ const saveTags = () => {
   border: 1px solid rgba(112, 135, 168, 0.14);
   border-radius: 18px;
   padding: 12px;
-  background: linear-gradient(180deg, #fff 0%, #f7fbff 100%);
+  background: var(--sf-color-surface-soft);
   box-shadow: 0 8px 20px rgba(101, 133, 173, 0.08);
 }
 
@@ -282,5 +286,46 @@ const saveTags = () => {
   font-size: 12px;
   line-height: 1.6;
   color: #7f8ca6;
+}
+
+/* Notebook theme override */
+.snippet-card {
+  border-color: var(--sf-color-border-medium) !important;
+  border-radius: 8px !important;
+  background: var(--sf-color-surface) !important;
+  box-shadow: none !important;
+}
+
+.snippet-mode,
+.snippet-label,
+.snippet-selector,
+.tag-editor-hint {
+  color: var(--sf-color-text-faint) !important;
+}
+
+.snippet-text,
+.tag-editor-label {
+  color: var(--sf-color-text) !important;
+}
+
+.snippet-tag,
+.snippet-summary,
+.snippet-analyze,
+.snippet-edit,
+.snippet-cancel,
+.tag-editor-input {
+  background: var(--sf-color-surface-soft) !important;
+  color: var(--sf-color-text-muted) !important;
+  border-color: var(--sf-color-border-medium) !important;
+}
+
+.snippet-save {
+  background: var(--sf-color-primary) !important;
+  color: var(--sf-color-surface) !important;
+}
+
+.snippet-delete {
+  background: var(--sf-color-error-soft) !important;
+  color: var(--sf-color-error) !important;
 }
 </style>

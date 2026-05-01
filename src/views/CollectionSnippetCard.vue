@@ -1,7 +1,10 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { computed } from "vue"
 
-import type { SnippetCollectionFolder, SnippetCollectionItem } from "../sdk/types"
+import type {
+  SnippetCollectionFolder,
+  SnippetCollectionItem
+} from "../sdk/types"
 
 const props = defineProps<{
   item: SnippetCollectionItem
@@ -24,7 +27,9 @@ const emit = defineEmits<{
 }>()
 
 const folderName = computed(
-  () => props.folders.find((folder) => folder.id === props.item.folderId)?.name || "未分类内容"
+  () =>
+    props.folders.find((folder) => folder.id === props.item.folderId)?.name ||
+    "未分类内容"
 )
 
 const handleDraftTitleInput = (event: Event) => {
@@ -47,7 +52,8 @@ const handleMoveChange = (event: Event) => {
   const target = event.target
   emit("move", {
     itemId: props.item.id,
-    folderId: target instanceof HTMLSelectElement ? target.value : props.item.folderId
+    folderId:
+      target instanceof HTMLSelectElement ? target.value : props.item.folderId
   })
 }
 </script>
@@ -58,7 +64,9 @@ const handleMoveChange = (event: Event) => {
       <div class="snippet-meta">
         <div class="snippet-title-row">
           <div class="snippet-title">{{ item.title }}</div>
-          <span class="snippet-badge">{{ item.mode === "selection" ? "划线" : "框选" }}</span>
+          <span class="snippet-badge">{{
+            item.mode === "selection" ? "划线" : "框选"
+          }}</span>
         </div>
         <div class="snippet-subline">
           <span>所在收藏夹：{{ folderName }}</span>
@@ -69,10 +77,15 @@ const handleMoveChange = (event: Event) => {
         <button class="ghost-button" @click="emit('toggleExpand', item.id)">
           {{ expanded ? "收起原文" : "查看原文" }}
         </button>
-        <button v-if="!editing" class="ghost-button" @click="emit('startEdit', item.id)">
+        <button
+          v-if="!editing"
+          class="ghost-button"
+          @click="emit('startEdit', item.id)">
           编辑
         </button>
-        <button class="danger-button" @click="emit('delete', item.id)">删除</button>
+        <button class="danger-button" @click="emit('delete', item.id)">
+          删除
+        </button>
       </div>
     </div>
 
@@ -91,8 +104,12 @@ const handleMoveChange = (event: Event) => {
           @input="handleDraftTextInput" />
       </div>
       <div class="inline-actions">
-        <button class="primary-button" @click="emit('saveEdit', item.id)">保存</button>
-        <button class="ghost-button" @click="emit('cancelEdit', item.id)">取消</button>
+        <button class="primary-button" @click="emit('saveEdit', item.id)">
+          保存
+        </button>
+        <button class="ghost-button" @click="emit('cancelEdit', item.id)">
+          取消
+        </button>
       </div>
     </template>
     <template v-else>
@@ -119,7 +136,9 @@ const handleMoveChange = (event: Event) => {
     </div>
 
     <div v-if="item.analysisTags?.length" class="tag-row">
-      <span v-for="tag in item.analysisTags" :key="tag" class="tag-chip">{{ tag }}</span>
+      <span v-for="tag in item.analysisTags" :key="tag" class="tag-chip">{{
+        tag
+      }}</span>
     </div>
 
     <div v-if="expanded" class="original-block">
@@ -135,7 +154,7 @@ const handleMoveChange = (event: Event) => {
   border: 1px solid rgba(122, 150, 192, 0.18);
   border-radius: 18px;
   padding: 18px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(246, 250, 255, 0.98));
+  background: var(--sf-color-surface-soft);
   box-shadow: 0 10px 24px rgba(98, 124, 167, 0.08);
 }
 
@@ -167,7 +186,7 @@ const handleMoveChange = (event: Event) => {
 .snippet-badge {
   padding: 2px 10px;
   border-radius: 999px;
-  background: linear-gradient(135deg, #ffe0f3 0%, #dff5ff 100%);
+  background: var(--sf-color-surface-soft);
   color: #4966a6;
   font-size: 12px;
   font-weight: 700;
@@ -210,7 +229,7 @@ const handleMoveChange = (event: Event) => {
 }
 
 .primary-button {
-  background: linear-gradient(135deg, #6f95ff 0%, #59bfff 100%);
+  background: var(--sf-color-surface-soft);
   color: #fff;
 }
 
@@ -290,5 +309,43 @@ const handleMoveChange = (event: Event) => {
   .snippet-head {
     flex-direction: column;
   }
+}
+
+/* Notebook theme override */
+.snippet-title,
+.snippet-text,
+.original-text {
+  color: var(--sf-color-text) !important;
+}
+
+.snippet-badge,
+.ghost-button,
+.tag-chip {
+  background: var(--sf-color-surface-soft) !important;
+  color: var(--sf-color-text-muted) !important;
+}
+
+.primary-button {
+  background: var(--sf-color-primary) !important;
+  color: var(--sf-color-surface) !important;
+}
+
+.danger-button {
+  background: var(--sf-color-error-soft) !important;
+  color: var(--sf-color-error) !important;
+}
+
+.field,
+.select {
+  border-color: var(--sf-color-border-medium) !important;
+  background: var(--sf-color-surface) !important;
+  color: var(--sf-color-text) !important;
+}
+
+.analysis-title,
+.selector-text,
+.snippet-subline,
+.move-label {
+  color: var(--sf-color-text-faint) !important;
 }
 </style>

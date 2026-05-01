@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { computed, onMounted, ref } from "vue"
 
 import { SmartFavoritesSDK } from "../sdk/client"
@@ -1126,9 +1126,7 @@ const distributionStyle = (ratio: number) => ({
           <div>
             <SectionHeader compact title="历史书签整理（高级）" />
             <div class="status">
-              {{
-                historyStatus
-              }}
+              {{ historyStatus }}
               这部分会调整已有书签目录，适合在确认推荐结果后再批量处理。
             </div>
           </div>
@@ -1274,7 +1272,7 @@ const distributionStyle = (ratio: number) => ({
 .page {
   min-height: 100vh;
   padding: 32px;
-  background: linear-gradient(135deg, #f3f7ff 0%, #fff8e8 45%, #fff 100%);
+  background: var(--sf-color-surface-soft);
   color: var(--sf-color-text);
   font-size: var(--sf-font-size-md);
   font-family: var(--sf-font-family);
@@ -1350,11 +1348,7 @@ const distributionStyle = (ratio: number) => ({
 .config-notice,
 .quickstart-hero,
 .quickstart-card {
-  background: linear-gradient(
-    135deg,
-    rgba(255, 247, 224, 0.9),
-    rgba(245, 250, 255, 0.96)
-  );
+  background: var(--sf-color-surface-soft);
 }
 
 .config-notice {
@@ -1399,7 +1393,7 @@ const distributionStyle = (ratio: number) => ({
   border: 1px solid rgba(124, 148, 188, 0.16);
   border-radius: 18px;
   padding: 16px;
-  background: linear-gradient(180deg, #fff, #f9fbff);
+  background: var(--sf-color-surface-soft);
 }
 
 .metric-label {
@@ -1447,11 +1441,11 @@ const distributionStyle = (ratio: number) => ({
 .distribution-fill {
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, #6f95ff 0%, #59bfff 100%);
+  background: var(--sf-color-surface-soft);
 }
 
 .distribution-fill.warm {
-  background: linear-gradient(90deg, #ffb56b 0%, #ff7f92 100%);
+  background: var(--sf-color-surface-soft);
 }
 
 .table-scroll {
@@ -1480,7 +1474,7 @@ const distributionStyle = (ratio: number) => ({
   border: 1px solid rgba(123, 153, 205, 0.18);
   border-radius: 18px;
   padding: 16px;
-  background: linear-gradient(180deg, #fff, #f9fbff);
+  background: var(--sf-color-surface-soft);
   text-align: left;
   cursor: pointer;
 }
@@ -1488,11 +1482,7 @@ const distributionStyle = (ratio: number) => ({
 .provider-card.active {
   border-color: rgba(104, 147, 255, 0.42);
   box-shadow: 0 12px 24px rgba(97, 129, 184, 0.12);
-  background: linear-gradient(
-    135deg,
-    rgba(255, 236, 247, 0.92),
-    rgba(236, 248, 255, 0.98)
-  );
+  background: var(--sf-color-surface-soft);
 }
 
 .provider-card-top {
@@ -1617,7 +1607,7 @@ const distributionStyle = (ratio: number) => ({
   padding: 16px;
   border: 1px solid rgba(124, 148, 188, 0.16);
   border-radius: 18px;
-  background: linear-gradient(180deg, #fff, #f9fbff);
+  background: var(--sf-color-surface-soft);
   text-align: left;
   cursor: pointer;
 }
@@ -1625,11 +1615,7 @@ const distributionStyle = (ratio: number) => ({
 .folder-item.active {
   border-color: rgba(104, 147, 255, 0.5);
   box-shadow: 0 12px 24px rgba(97, 129, 184, 0.12);
-  background: linear-gradient(
-    135deg,
-    rgba(255, 236, 247, 0.92),
-    rgba(236, 248, 255, 0.98)
-  );
+  background: var(--sf-color-surface-soft);
 }
 
 .folder-item-top {
@@ -1689,21 +1675,7 @@ const distributionStyle = (ratio: number) => ({
 
 .empty-hero {
   text-align: left;
-  background: radial-gradient(
-      circle at top right,
-      rgba(255, 215, 239, 0.45),
-      transparent 36%
-    ),
-    radial-gradient(
-      circle at bottom left,
-      rgba(184, 233, 255, 0.45),
-      transparent 38%
-    ),
-    linear-gradient(
-      135deg,
-      rgba(255, 255, 255, 0.97),
-      rgba(245, 249, 255, 0.98)
-    );
+  background: var(--sf-color-surface-soft);
 }
 
 .empty-kicker {
@@ -1844,5 +1816,63 @@ const distributionStyle = (ratio: number) => ({
     flex-direction: column;
     align-items: stretch;
   }
+}
+
+/* Notebook theme override: remove gradients and vivid fills */
+.page {
+  background: var(--sf-color-bg) !important;
+}
+
+.config-notice,
+.quickstart-hero,
+.quickstart-card,
+.metric-panel,
+.event-card,
+.provider-card,
+.folder-item,
+.knowledge-card,
+.empty-hero,
+.history-item,
+.snippets-panel,
+.folders-panel {
+  background: var(--sf-color-surface) !important;
+  border-color: var(--sf-color-border-medium) !important;
+  box-shadow: none !important;
+}
+
+.provider-card.active,
+.folder-item.active {
+  background: var(--sf-color-surface-soft) !important;
+  border-color: var(--sf-color-accent) !important;
+}
+
+.distribution-track {
+  background: var(--sf-color-surface-soft) !important;
+}
+
+.distribution-fill,
+.distribution-fill.warm {
+  background: var(--sf-color-accent) !important;
+}
+
+.provider-badge,
+.folder-count,
+.tag-chip,
+.mini-button,
+.mini-icon,
+.eye-button {
+  background: var(--sf-color-surface-soft) !important;
+  color: var(--sf-color-text-muted) !important;
+}
+
+.mini-button.danger,
+.mini-icon.danger {
+  background: var(--sf-color-error-soft) !important;
+  color: var(--sf-color-error) !important;
+}
+
+.field,
+.secret-input {
+  border-color: var(--sf-color-border-medium) !important;
 }
 </style>

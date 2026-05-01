@@ -314,51 +314,58 @@ function openKnowledgeBase() {
   right: 20px;
   bottom: 20px;
   z-index: 2147483640;
-  font-family: "SF Pro Text", "Segoe UI", "PingFang SC", sans-serif;
+  font-family: -apple-system, "PingFang SC", "Hiragino Sans GB", sans-serif;
   font-size: 13px;
 }
 
+/* Ball — ink stamp feel */
 .kc-ball {
-  width: 44px;
-  height: 44px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
-  background: #172033;
+  background: #1b1b22;
   color: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  box-shadow: 0 4px 16px rgba(23, 32, 51, 0.3);
+  box-shadow: 0 2px 10px rgba(27, 27, 34, 0.22);
   transition:
-    transform 0.2s,
-    box-shadow 0.2s;
+    transform 0.18s,
+    box-shadow 0.18s,
+    background 0.18s;
   user-select: none;
 }
 
 .kc-ball:hover {
-  transform: scale(1.08);
-  box-shadow: 0 6px 20px rgba(23, 32, 51, 0.4);
+  transform: scale(1.07);
+  box-shadow: 0 4px 16px rgba(27, 27, 34, 0.28);
 }
 
 .kc-ball--saving {
-  background: #6b7280;
+  background: #6b6870;
+}
+
+.kc-ball--open {
+  background: #3960a8;
 }
 
 .kc-ball__icon {
-  font-size: 18px;
+  font-size: 16px;
   line-height: 1;
 }
 
+/* Context menu — clean paper popup */
 .kc-menu {
   position: absolute;
-  right: 52px;
+  right: 48px;
   bottom: 0;
   background: #fff;
-  border: 1px solid rgba(23, 32, 51, 0.1);
-  border-radius: 12px;
-  box-shadow: 0 8px 32px rgba(23, 32, 51, 0.15);
-  padding: 6px 0;
-  min-width: 160px;
+  border: 1px solid rgba(27, 27, 34, 0.1);
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(27, 27, 34, 0.12);
+  padding: 4px 0;
+  min-width: 152px;
   overflow: hidden;
 }
 
@@ -367,40 +374,45 @@ function openKnowledgeBase() {
   align-items: center;
   gap: 8px;
   width: 100%;
-  padding: 9px 14px;
+  padding: 8px 13px;
   background: none;
   border: none;
   font-size: 13px;
-  color: #172033;
+  color: #1b1b22;
   cursor: pointer;
   text-align: left;
-  transition: background 0.15s;
+  transition: background 0.12s;
+  font-family: inherit;
 }
 
 .kc-menu__item:hover {
-  background: #f6f8fb;
+  background: #f5f4f0;
 }
 
 .kc-menu__item:disabled {
-  color: #9ca3af;
+  color: #aeadb8;
   cursor: not-allowed;
 }
 
 .kc-menu__icon {
-  font-size: 14px;
+  font-size: 13px;
+  width: 16px;
+  text-align: center;
+  flex-shrink: 0;
 }
 
+/* Deep save panel — compact notebook sidebar */
 .kc-panel {
   position: fixed;
   right: 20px;
   top: 50%;
   transform: translateY(-50%);
-  width: 360px;
+  width: 340px;
   max-height: 80vh;
   background: #fff;
-  border: 1px solid rgba(23, 32, 51, 0.1);
-  border-radius: 16px;
-  box-shadow: 0 16px 48px rgba(23, 32, 51, 0.2);
+  border: 1px solid rgba(27, 27, 34, 0.1);
+  border-radius: 10px;
+  box-shadow: 0 8px 32px rgba(27, 27, 34, 0.14);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -410,46 +422,51 @@ function openKnowledgeBase() {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 20px;
-  border-bottom: 1px solid rgba(23, 32, 51, 0.08);
+  padding: 13px 18px;
+  border-bottom: 1px solid rgba(27, 27, 34, 0.07);
+  background: #f5f4f0;
 }
 
 .kc-panel__title {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
-  color: #172033;
+  color: #1b1b22;
+  letter-spacing: -0.01em;
 }
 
 .kc-panel__close {
   background: none;
   border: none;
-  font-size: 16px;
-  color: #9ca3af;
+  font-size: 14px;
+  color: #aeadb8;
   cursor: pointer;
   padding: 2px 6px;
-  border-radius: 6px;
-  transition: background 0.15s;
+  border-radius: 4px;
+  transition:
+    color 0.12s,
+    background 0.12s;
+  line-height: 1;
 }
 
 .kc-panel__close:hover {
-  background: #f6f8fb;
-  color: #172033;
+  color: #1b1b22;
+  background: rgba(27, 27, 34, 0.06);
 }
 
 .kc-panel__body {
   flex: 1;
   overflow-y: auto;
-  padding: 16px 20px;
+  padding: 14px 18px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 11px;
 }
 
 .kc-panel__footer {
   display: flex;
   gap: 8px;
-  padding: 12px 20px;
-  border-top: 1px solid rgba(23, 32, 51, 0.08);
+  padding: 10px 18px;
+  border-top: 1px solid rgba(27, 27, 34, 0.07);
   justify-content: flex-end;
 }
 
@@ -460,19 +477,20 @@ function openKnowledgeBase() {
 }
 
 .kc-label {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 500;
-  color: #627089;
+  color: #6b6870;
+  letter-spacing: 0.02em;
 }
 
 .kc-input,
 .kc-textarea,
 .kc-select {
-  padding: 8px 10px;
-  border: 1px solid rgba(23, 32, 51, 0.15);
-  border-radius: 8px;
+  padding: 7px 10px;
+  border: 1px solid rgba(27, 27, 34, 0.12);
+  border-radius: 5px;
   font-size: 13px;
-  color: #172033;
+  color: #1b1b22;
   background: #fff;
   outline: none;
   transition: border-color 0.15s;
@@ -483,68 +501,73 @@ function openKnowledgeBase() {
 .kc-input:focus,
 .kc-textarea:focus,
 .kc-select:focus {
-  border-color: #172033;
+  border-color: #3960a8;
 }
 
 .kc-status {
   font-size: 12px;
-  color: #627089;
-  padding: 6px 0;
+  color: #6b6870;
+  padding: 4px 0;
 }
 
 .kc-status--error {
-  color: #dc2626;
+  color: #b03a2e;
 }
 
 .kc-btn {
-  padding: 8px 14px;
-  border-radius: 8px;
-  font-size: 13px;
+  padding: 7px 13px;
+  border-radius: 5px;
+  font-size: 12px;
   font-weight: 500;
   cursor: pointer;
-  border: none;
-  transition: opacity 0.15s;
+  border: 1px solid transparent;
+  transition:
+    opacity 0.15s,
+    background 0.12s;
   font-family: inherit;
 }
 
 .kc-btn:disabled {
-  opacity: 0.5;
+  opacity: 0.4;
   cursor: not-allowed;
 }
 
 .kc-btn--primary {
-  background: #172033;
+  background: #1b1b22;
   color: #fff;
+  border-color: #1b1b22;
 }
 
 .kc-btn--primary:hover:not(:disabled) {
-  opacity: 0.85;
+  opacity: 0.82;
 }
 
 .kc-btn--secondary {
-  background: #f6f8fb;
-  color: #172033;
+  background: #fff;
+  color: #1b1b22;
+  border-color: rgba(27, 27, 34, 0.15);
 }
 
 .kc-btn--secondary:hover:not(:disabled) {
-  background: #e9ecf0;
+  background: #f5f4f0;
 }
 
+/* Toast notification */
 .kc-toast {
   position: absolute;
-  bottom: 54px;
+  bottom: 50px;
   right: 0;
-  background: #172033;
+  background: #1b1b22;
   color: #fff;
   font-size: 12px;
-  padding: 8px 14px;
-  border-radius: 10px;
+  padding: 7px 12px;
+  border-radius: 6px;
   white-space: nowrap;
-  box-shadow: 0 4px 12px rgba(23, 32, 51, 0.2);
+  box-shadow: 0 2px 10px rgba(27, 27, 34, 0.2);
 }
 
 .kc-toast--error {
-  background: #dc2626;
+  background: #b03a2e;
 }
 
 /* Transitions */

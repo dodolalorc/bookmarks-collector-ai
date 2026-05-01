@@ -1,7 +1,11 @@
 ﻿<script setup lang="ts">
 import { computed } from "vue"
 
-import type { AiModelProfile, CapturedSnippet, PageDigestSegment } from "../sdk/types"
+import type {
+  AiModelProfile,
+  CapturedSnippet,
+  PageDigestSegment
+} from "../sdk/types"
 import OverlaySnippetCard from "./OverlaySnippetCard.vue"
 
 type OverlayStateView = {
@@ -171,7 +175,9 @@ const onSegmentToggle = (segmentId: string, selected: boolean) => {
       class="prompt"
       :style="{ right: promptRight }">
       <div class="prompt-title">检测到你收藏了当前页面</div>
-      <div class="prompt-text">要不要现在整理标签，并补充当前页面里的知识片段？</div>
+      <div class="prompt-text">
+        要不要现在整理标签，并补充当前页面里的知识片段？
+      </div>
       <div class="prompt-actions">
         <button class="chip chip-gradient" @click="emit('classifyNow')">
           <font-awesome-icon icon="bolt" />
@@ -198,7 +204,9 @@ const onSegmentToggle = (segmentId: string, selected: boolean) => {
         class="selection-anchor-pop"
         :style="selectionPromptStyle">
         <div class="selection-anchor-title">加入当前抓取面板</div>
-        <div class="selection-anchor-copy">选中文本后，这个按钮会出现在选择区域末尾，方便直接加入当前页面草稿。</div>
+        <div class="selection-anchor-copy">
+          选中文本后，这个按钮会出现在选择区域末尾，方便直接加入当前页面草稿。
+        </div>
         <button class="chip chip-gradient" @click="emit('captureSelection')">
           <font-awesome-icon icon="highlighter" />
           选择加入
@@ -288,10 +296,16 @@ const onSegmentToggle = (segmentId: string, selected: boolean) => {
       <div class="sidebar-footer">
         <div class="footer-text">模型配置和内容整理都在管理台里</div>
         <div class="footer-actions">
-          <button class="icon-button" title="模型配置" @click="emit('openOptions')">
+          <button
+            class="icon-button"
+            title="模型配置"
+            @click="emit('openOptions')">
             <font-awesome-icon icon="gear" />
           </button>
-          <button class="icon-button" title="内容整理" @click="emit('openHistory')">
+          <button
+            class="icon-button"
+            title="内容整理"
+            @click="emit('openHistory')">
             <font-awesome-icon icon="bookmark" />
           </button>
         </div>
@@ -303,10 +317,7 @@ const onSegmentToggle = (segmentId: string, selected: boolean) => {
       class="ai-dialog-backdrop"
       @click="emit('closeAiDialog')" />
 
-    <section
-      v-if="state.aiDialogOpen"
-      class="ai-dialog"
-      @click.stop>
+    <section v-if="state.aiDialogOpen" class="ai-dialog" @click.stop>
       <div class="ai-panel-head">
         <div>
           <div class="sidebar-eyebrow">Page Digest</div>
@@ -316,13 +327,22 @@ const onSegmentToggle = (segmentId: string, selected: boolean) => {
           </div>
         </div>
         <div class="panel-actions">
-          <button class="icon-button" title="刷新页面抓取" @click="emit('refreshArticle')">
+          <button
+            class="icon-button"
+            title="刷新页面抓取"
+            @click="emit('refreshArticle')">
             <font-awesome-icon icon="rotate-right" />
           </button>
-          <button class="icon-button" title="模型配置" @click="emit('openOptions')">
+          <button
+            class="icon-button"
+            title="模型配置"
+            @click="emit('openOptions')">
             <font-awesome-icon icon="gear" />
           </button>
-          <button class="icon-button" title="关闭弹窗" @click="emit('closeAiDialog')">
+          <button
+            class="icon-button"
+            title="关闭弹窗"
+            @click="emit('closeAiDialog')">
             <font-awesome-icon icon="xmark" />
           </button>
         </div>
@@ -338,19 +358,31 @@ const onSegmentToggle = (segmentId: string, selected: boolean) => {
         <div class="meta-grid">
           <label class="field-wrap">
             <span class="field-label">标题</span>
-            <input class="field" :value="state.articleTitle" @input="onTextInput('title')" />
+            <input
+              class="field"
+              :value="state.articleTitle"
+              @input="onTextInput('title')" />
           </label>
           <label class="field-wrap">
             <span class="field-label">作者</span>
-            <input class="field" :value="state.articleAuthor" @input="onTextInput('author')" />
+            <input
+              class="field"
+              :value="state.articleAuthor"
+              @input="onTextInput('author')" />
           </label>
           <label class="field-wrap">
             <span class="field-label">日期</span>
-            <input class="field" :value="state.articleDate" @input="onTextInput('date')" />
+            <input
+              class="field"
+              :value="state.articleDate"
+              @input="onTextInput('date')" />
           </label>
           <label class="field-wrap field-wrap-wide">
             <span class="field-label">网址</span>
-            <input class="field" :value="state.articleUrl" @input="onTextInput('url')" />
+            <input
+              class="field"
+              :value="state.articleUrl"
+              @input="onTextInput('url')" />
           </label>
         </div>
 
@@ -388,7 +420,8 @@ const onSegmentToggle = (segmentId: string, selected: boolean) => {
           <div v-else class="segment-panel">
             <div class="segment-toolbar">
               <div class="segment-summary">
-                已选 {{ selectedSegmentCount }} / {{ state.articleSegments.length }} 段
+                已选 {{ selectedSegmentCount }} /
+                {{ state.articleSegments.length }} 段
               </div>
               <div class="segment-actions">
                 <button class="chip" @click="emit('selectAllSegments', true)">
@@ -417,10 +450,14 @@ const onSegmentToggle = (segmentId: string, selected: boolean) => {
                     type="checkbox"
                     :checked="segment.selected"
                     @change="onSegmentToggle(segment.id, !segment.selected)" />
-                  <span class="segment-index">段落 {{ segment.order + 1 }}</span>
+                  <span class="segment-index"
+                    >段落 {{ segment.order + 1 }}</span
+                  >
                 </div>
                 <div class="segment-text">{{ segment.text }}</div>
-                <div v-if="segment.reason" class="segment-reason">{{ segment.reason }}</div>
+                <div v-if="segment.reason" class="segment-reason">
+                  {{ segment.reason }}
+                </div>
               </label>
             </div>
           </div>
@@ -451,7 +488,10 @@ const onSegmentToggle = (segmentId: string, selected: boolean) => {
           <label class="field-wrap model-select-wrap">
             <span class="field-label">模型选择</span>
             <div class="select-shell">
-              <select class="field select-field" :value="state.aiModelId" @change="onModelChange">
+              <select
+                class="field select-field"
+                :value="state.aiModelId"
+                @change="onModelChange">
                 <option
                   v-for="model in state.aiModels"
                   :key="model.id"
@@ -503,7 +543,7 @@ const onSegmentToggle = (segmentId: string, selected: boolean) => {
   max-width: 260px;
   border-radius: var(--sf-radius-lg);
   padding: var(--sf-space-3) var(--sf-space-3) var(--sf-space-2);
-  background: linear-gradient(135deg, #fff9ff 0%, #f4fbff 55%, #edf8ff 100%);
+  background: var(--sf-color-surface-soft);
   border: 1px solid rgba(132, 174, 224, 0.24);
   box-shadow: 0 18px 34px rgba(93, 118, 164, 0.18);
 }
@@ -546,7 +586,7 @@ const onSegmentToggle = (segmentId: string, selected: boolean) => {
   border-radius: 50%;
   border: 2px solid rgba(255, 255, 255, 0.96);
   outline: 1px solid rgba(74, 107, 164, 0.52);
-  background: radial-gradient(circle at 30% 30%, #ffe1f5 0%, #b9ecff 42%, #6c95ff 100%);
+  background: var(--sf-color-surface-soft);
   box-shadow:
     0 10px 24px rgba(57, 93, 156, 0.4),
     0 0 0 3px rgba(168, 216, 255, 0.22);
@@ -554,7 +594,7 @@ const onSegmentToggle = (segmentId: string, selected: boolean) => {
 }
 
 .floating-ball-ai {
-  background: radial-gradient(circle at 30% 30%, #fff0c7 0%, #ffd27f 34%, #ff8c42 100%);
+  background: var(--sf-color-surface-soft);
 }
 
 .selection-anchor-wrap {
@@ -572,7 +612,7 @@ const onSegmentToggle = (segmentId: string, selected: boolean) => {
   border-radius: 999px;
   padding: 0;
   transform: translate(-50%, -50%);
-  background: linear-gradient(135deg, #ff7ecb 0%, #7db6ff 100%);
+  background: var(--sf-color-surface-soft);
   box-shadow:
     0 6px 16px rgba(87, 114, 193, 0.3),
     0 0 0 3px rgba(255, 255, 255, 0.92);
@@ -593,7 +633,7 @@ const onSegmentToggle = (segmentId: string, selected: boolean) => {
   width: 200px;
   border-radius: 16px;
   padding: 12px;
-  background: linear-gradient(180deg, #fff8ff 0%, #f4fbff 100%);
+  background: var(--sf-color-surface-soft);
   border: 1px solid rgba(137, 175, 233, 0.24);
   box-shadow: 0 18px 34px rgba(85, 106, 155, 0.2);
   animation: pop-in 160ms ease;
@@ -623,12 +663,7 @@ const onSegmentToggle = (segmentId: string, selected: boolean) => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: linear-gradient(
-    180deg,
-    rgba(255, 249, 255, 0.99) 0%,
-    rgba(244, 250, 255, 0.99) 42%,
-    rgba(238, 247, 255, 0.99) 100%
-  );
+  background: var(--sf-color-surface-soft);
   border-left: 1px solid rgba(136, 176, 224, 0.26);
   box-shadow: -24px 0 48px rgba(75, 105, 150, 0.22);
   backdrop-filter: blur(18px);
@@ -659,31 +694,21 @@ const onSegmentToggle = (segmentId: string, selected: boolean) => {
   bottom: 24px;
   width: 2px;
   border-radius: 999px;
-  background: linear-gradient(180deg, rgba(108, 149, 255, 0.08), rgba(108, 149, 255, 0.48), rgba(108, 149, 255, 0.08));
+  background: var(--sf-color-surface-soft);
 }
 
 .sidebar-head,
 .ai-panel-head {
   padding: var(--sf-space-4) var(--sf-space-4) var(--sf-space-3);
   border-bottom: 1px solid rgba(136, 176, 224, 0.14);
-  background: linear-gradient(
-    135deg,
-    rgba(255, 217, 244, 0.58) 0%,
-    rgba(213, 243, 255, 0.68) 65%,
-    rgba(240, 248, 255, 0.76) 100%
-  );
+  background: var(--sf-color-surface-soft);
   display: flex;
   justify-content: space-between;
   gap: var(--sf-space-3);
 }
 
 .ai-panel-head {
-  background: linear-gradient(
-    135deg,
-    rgba(255, 233, 176, 0.76) 0%,
-    rgba(255, 246, 228, 0.82) 52%,
-    rgba(241, 248, 255, 0.82) 100%
-  );
+  background: var(--sf-color-surface-soft);
 }
 
 .sidebar-eyebrow {
@@ -745,7 +770,7 @@ const onSegmentToggle = (segmentId: string, selected: boolean) => {
 }
 
 .chip-gradient {
-  background: linear-gradient(135deg, #ff8ed8 0%, #8ad8ff 100%);
+  background: var(--sf-color-surface-soft);
   color: #21304f;
 }
 
@@ -753,7 +778,7 @@ const onSegmentToggle = (segmentId: string, selected: boolean) => {
   margin-top: 8px;
   padding: 14px;
   border-radius: 16px;
-  background: linear-gradient(180deg, rgba(255, 248, 231, 0.96), rgba(255, 255, 255, 0.98));
+  background: var(--sf-color-surface-soft);
   border: 1px solid rgba(255, 198, 107, 0.28);
   color: #33445f;
   font-size: 13px;
@@ -783,7 +808,7 @@ const onSegmentToggle = (segmentId: string, selected: boolean) => {
   margin: var(--sf-space-3) var(--sf-space-4) 0;
   border-radius: var(--sf-radius-lg);
   padding: var(--sf-space-3);
-  background: linear-gradient(135deg, #fff1fa 0%, #eef9ff 100%);
+  background: var(--sf-color-surface-soft);
   border: 1px solid rgba(150, 195, 235, 0.18);
 }
 
@@ -858,12 +883,7 @@ const onSegmentToggle = (segmentId: string, selected: boolean) => {
   flex-direction: column;
   overflow: hidden;
   border-radius: 28px;
-  background: linear-gradient(
-    180deg,
-    rgba(255, 251, 240, 0.99) 0%,
-    rgba(255, 246, 231, 0.99) 36%,
-    rgba(247, 251, 255, 0.99) 100%
-  );
+  background: var(--sf-color-surface-soft);
   border: 1px solid rgba(236, 203, 120, 0.22);
   box-shadow: 0 30px 80px rgba(75, 105, 150, 0.26);
   transform-origin: center bottom;
@@ -934,7 +954,7 @@ const onSegmentToggle = (segmentId: string, selected: boolean) => {
 }
 
 .mode-chip.active {
-  background: linear-gradient(135deg, #fff0c7 0%, #ffdca1 100%);
+  background: var(--sf-color-surface-soft);
   color: #714d12;
 }
 
@@ -1128,5 +1148,88 @@ const onSegmentToggle = (segmentId: string, selected: boolean) => {
     width: calc(100vw - 24px);
     max-height: calc(100vh - 32px);
   }
+}
+
+/* Notebook theme override: neutral paper + pencil lines */
+[class*="gradient"] {
+  background: var(--sf-color-surface-soft) !important;
+  color: var(--sf-color-text) !important;
+}
+
+.floating-ball,
+.floating-ball-ai,
+.selection-anchor {
+  background: var(--sf-color-primary) !important;
+  outline: none !important;
+  border-color: var(--sf-color-surface) !important;
+  box-shadow: 0 4px 12px rgba(27, 27, 34, 0.18) !important;
+}
+
+.page-sidebar,
+.ai-dialog,
+.selection-anchor-pop,
+.summary-output,
+.selection-panel,
+.config-notice,
+.empty-state,
+.mode-switch,
+.segment-card,
+.prompt-box {
+  background: var(--sf-color-surface) !important;
+  border-color: var(--sf-color-border-medium) !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+}
+
+.sidebar-head,
+.ai-panel-head {
+  background: var(--sf-color-bg) !important;
+  border-bottom-color: var(--sf-color-border) !important;
+}
+
+.chip,
+.chip-gradient,
+.icon-button,
+.mode-chip.active,
+.stat-pill {
+  background: var(--sf-color-surface-soft) !important;
+  color: var(--sf-color-text-muted) !important;
+  border: 1px solid var(--sf-color-border-medium) !important;
+}
+
+.field,
+.select-field,
+.textarea-large,
+.textarea-prompt {
+  background: var(--sf-color-surface) !important;
+  border-color: var(--sf-color-border-medium) !important;
+  color: var(--sf-color-text) !important;
+}
+
+.selection-label,
+.field-label,
+.sidebar-eyebrow,
+.segment-index,
+.field-label-muted,
+.footer-text,
+.select-arrow {
+  color: var(--sf-color-text-faint) !important;
+}
+
+.sidebar-title,
+.selection-text,
+.segment-text,
+.prompt-title,
+.selection-anchor-title {
+  color: var(--sf-color-text) !important;
+}
+
+.sidebar-subtitle,
+.sidebar-status,
+.segment-summary,
+.prompt-text,
+.selection-anchor-copy,
+.segment-reason {
+  color: var(--sf-color-text-muted) !important;
 }
 </style>
