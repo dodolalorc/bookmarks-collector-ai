@@ -1,540 +1,301 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue"
+import { onMounted, ref } from "vue"
 
-import { SmartFavoritesSDK } from "../sdk/client"
-import { getProviderConfigNotice, resolveProvider } from "../sdk/provider"
-import type {
-  BookmarkMutationResult,
-  CapturePageResponse,
-  ExperimentCondition,
-  RecommendationInput,
-  RecommendationResult,
-  SmartFavoritesSettings
-} from "../sdk/types"
-import BaseButton from "../ui/BaseButton.vue"
-import BaseCard from "../ui/BaseCard.vue"
-import FormField from "../ui/FormField.vue"
-import SectionHeader from "../ui/SectionHeader.vue"
-import SuggestionCard from "./SuggestionCard.vue"
+async function sendMessage<T>(type: string, payload?: unknown): Promise<T> {
+  const response = await chrome.runtime.sendMessage({ type, payload })
+  if (!response?.ok) throw new Error(response?.error ?? "操作失败")
+  return response.payload as T
+}
 
-const QUICK_CAPTURE_FOLDER = "待整理"
+interface RecentItem {
+  id: string
+  title: string
+  url: string
+  category: string
+  createdAt: number
+}
 
-const sdk = new SmartFavoritesSDK()
+const todayCount = ref(0)
+const recentItems = ref<RecentItem[]>([])
+const isLoading = ref(true)
 
-const capture = ref<CapturePageResponse | null>(null)
-const settings = ref<SmartFavoritesSettings | null>(null)
-const notes = ref("")
-const manualTags = ref("")
-const newFolderTitle = ref("")
-const recommendation = ref<RecommendationResult | null>(null)
-const selectedTarget = ref("")
-const status = ref("正在读取当前页面…")
-const isLoading = ref(false)
-const result = ref<BookmarkMutationResult | null>(null)
-const recommendationStartedAt = ref<number | null>(null)
-
-const canRecommend = computed(() => Boolean(capture.value?.page.url))
-const selectedSuggestion = computed(() =>
-  recommendation.value?.suggestions.find(
-    (item) => item.key === selectedTarget.value
-  )
-)
-
-const activeModelLabel = computed(() => {
-  if (!settings.value) {
-    return "未配置 AI 模型"
-  }
-
-  const activeProvider =
-    settings.value.providers.find(
-      (provider) => provider.id === settings.value?.activeProviderId
-    ) ?? settings.value.providers[0]
-
-  return activeProvider?.label || activeProvider?.model || "未配置 AI 模型"
-})
-
-const activeProviderNotice = computed(() => {
-  if (!settings.value) {
-    return ""
-  }
-
-  return getProviderConfigNotice(resolveProvider(settings.value))
-})
-
-const quickFacts = computed(() => {
-  if (!capture.value?.page) {
-    return []
-  }
-
-  const page = capture.value.page
-  return [
-    { label: "标题", value: page.title || "未识别" },
-    { label: "作者", value: page.author || "未识别" },
-    { label: "站点", value: page.siteName || page.domain || "未识别" },
-    { label: "域名", value: page.domain || "未识别" }
-  ]
-})
-
-const pageSummary = computed(() => {
-  if (!capture.value?.page) {
-    return "没有可分析的页面信息。"
-  }
-
-  const selection = capture.value.selectionText?.trim()
-  if (selection) {
-    return selection
-  }
-
-  return (
-    capture.value.page.summary ||
-    "未抓取到足够正文，建议手动选择页面文字后再次抓取。"
-  )
-})
-
-onMounted(() => {
-  void bootstrap()
-})
-
-const parseTags = () =>
-  manualTags.value
-    .split(",")
-    .map((tag) => tag.trim())
-    .filter(Boolean)
-
-const bootstrap = async () => {
-  isLoading.value = true
-  status.value = "正在读取插件配置和当前页面…"
-
+onMounted(async () => {
   try {
-    const [loadedSettings, loadedCapture] = await Promise.all([
-      sdk.getSettings(),
-      sdk.captureActivePage()
+    const [count, items] = await Promise.all([
+      sendMessage<number>("knowledge/get-today-count"),
+      sendMessage<RecentItem[]>("knowledge/get-recent", { limit: 3 })
     ])
-
-    settings.value = loadedSettings
-    capture.value = loadedCapture
-    status.value = loadedCapture.page.url
-      ? "页面上下文已就绪，可以直接推荐收藏夹。"
-      : "当前标签页不可抓取，可手动输入备注后继续。"
-  } catch (error) {
-    status.value =
-      error instanceof Error ? error.message : "无法初始化当前页面信息。"
+    todayCount.value = count
+    recentItems.value = items
+  } catch {
+    // ignore - not yet configured
   } finally {
     isLoading.value = false
   }
+})
+
+function openKnowledgeBase() {
+  chrome.runtime.sendMessage({ type: "knowledge/open-knowledge-base" })
 }
 
-const refreshCapture = async () => {
-  isLoading.value = true
-  status.value = "正在重新抓取当前页内容…"
-
-  try {
-    const nextCapture = await sdk.captureActivePage()
-    capture.value = nextCapture
-    status.value = "已更新页面内容，可以重新生成推荐。"
-  } catch (error) {
-    status.value =
-      error instanceof Error ? error.message : "抓取失败，请刷新页面后重试。"
-  } finally {
-    isLoading.value = false
-  }
+function openHistory() {
+  chrome.tabs.create({ url: chrome.runtime.getURL("options.html#history") })
 }
 
-const runRecommendation = async () => {
-  if (!capture.value?.page.url) {
-    status.value = "当前没有可用于分析的网址。"
-    return
-  }
-
-  isLoading.value = true
-  recommendationStartedAt.value = Date.now()
-  status.value = "正在分析页面和现有收藏夹结构…"
-
-  try {
-    const payload: RecommendationInput = {
-      page: capture.value.page,
-      notes: notes.value,
-      selectedText: capture.value.selectionText,
-      tags: parseTags()
-    }
-
-    const nextRecommendation = await sdk.recommendFolders(payload)
-    recommendation.value = nextRecommendation
-    selectedTarget.value = nextRecommendation.suggestions[0]?.key ?? ""
-
-    const createdSuggestion = nextRecommendation.suggestions.find(
-      (item) => item.type === "create"
-    )
-    if (createdSuggestion?.title) {
-      newFolderTitle.value = createdSuggestion.title
-    }
-
-    status.value =
-      nextRecommendation.source === "ai"
-        ? "已完成 AI 推荐，请确认后执行。"
-        : activeProviderNotice.value ||
-          "尚未配置模型，请前往插件管理页 > 模型配置进行配置。当前已使用本地推荐。"
-  } catch (error) {
-    status.value =
-      error instanceof Error ? error.message : "推荐失败，请稍后再试。"
-  } finally {
-    isLoading.value = false
-  }
+function openSettings() {
+  chrome.tabs.create({ url: chrome.runtime.getURL("options.html#settings") })
 }
 
-const applyRecommendation = async () => {
-  if (!capture.value?.page.url || !selectedSuggestion.value) {
-    status.value = "请先完成推荐并选择目标收藏夹。"
-    return
-  }
-
-  isLoading.value = true
-  status.value = "正在写入浏览器书签…"
-
-  try {
-    const selectedRank = recommendation.value?.suggestions.findIndex(
-      (item) => item.key === selectedSuggestion.value?.key
-    )
-    const mutation = await sdk.applyBookmarkRecommendation({
-      page: capture.value.page,
-      input: {
-        page: capture.value.page,
-        notes: notes.value,
-        selectedText: capture.value.selectionText,
-        tags: parseTags()
-      },
-      recommendation: {
-        ...selectedSuggestion.value,
-        title:
-          selectedSuggestion.value.type === "create"
-            ? newFolderTitle.value.trim() || selectedSuggestion.value.title
-            : selectedSuggestion.value.title
-      }
-    })
-
-    result.value = mutation
-    if (recommendation.value) {
-      const condition: ExperimentCondition =
-        recommendation.value.source === "ai" ? "enhanced" : "rule"
-      const rank = typeof selectedRank === "number" && selectedRank >= 0
-        ? selectedRank + 1
-        : undefined
-
-      await sdk.recordExperimentEvent({
-        condition,
-        source: "popup",
-        pageTitle: capture.value.page.title,
-        url: capture.value.page.url,
-        domain: capture.value.page.domain,
-        folderPath: mutation.folderPath,
-        steps:
-          recommendation.value.suggestions[0]?.key === selectedSuggestion.value.key
-            ? 2
-            : 3,
-        latencyMs: recommendationStartedAt.value
-          ? Date.now() - recommendationStartedAt.value
-          : 0,
-        suggestionCount: recommendation.value.suggestions.length,
-        selectedRank: rank,
-        top1Accepted: rank === 1,
-        top3Covered: Boolean(rank && rank <= 3),
-        recommendedPaths: recommendation.value.suggestions.map((item) => item.path)
-      })
-    }
-    status.value = mutation.message
-  } catch (error) {
-    status.value =
-      error instanceof Error ? error.message : "写入书签失败，请稍后再试。"
-  } finally {
-    isLoading.value = false
-  }
-}
-
-const quickCapture = async () => {
-  if (!capture.value?.page.url) {
-    status.value = "当前没有可用于抓取的网址。"
-    return
-  }
-
-  isLoading.value = true
-  status.value = "正在执行一键抓取…"
-
-  try {
-    const page = capture.value.page
-    const derivedTags = [page.domain, page.siteName, page.author]
-      .filter(Boolean)
-      .slice(0, 3) as string[]
-
-    const mutation = await sdk.applyBookmarkRecommendation({
-      page,
-      input: {
-        page,
-        notes: `一键抓取：${page.title}`,
-        selectedText: capture.value.selectionText,
-        tags: [...parseTags(), ...derivedTags].slice(0, 6)
-      },
-      recommendation: {
-        key: `create:${QUICK_CAPTURE_FOLDER}`,
-        type: "create",
-        title: QUICK_CAPTURE_FOLDER,
-        path: `新建 / ${QUICK_CAPTURE_FOLDER}`,
-        score: 0.5,
-        reason: "一键抓取按标题/作者/站点做快速归档"
-      }
-    })
-
-    result.value = mutation
-    status.value = `已一键抓取到「${QUICK_CAPTURE_FOLDER}」。`
-  } catch (error) {
-    status.value =
-      error instanceof Error ? error.message : "一键抓取失败，请稍后再试。"
-  } finally {
-    isLoading.value = false
-  }
-}
-
-const openWorkspace = async () => {
-  await sdk.openExtensionPage("tabs/manage.html")
+function formatTime(ts: number) {
+  const d = new Date(ts)
+  const now = new Date()
+  const diffMs = now.getTime() - d.getTime()
+  const diffMin = Math.floor(diffMs / 60000)
+  if (diffMin < 1) return "刚刚"
+  if (diffMin < 60) return `${diffMin} 分钟前`
+  const diffH = Math.floor(diffMin / 60)
+  if (diffH < 24) return `${diffH} 小时前`
+  return `${Math.floor(diffH / 24)} 天前`
 }
 </script>
 
 <template>
-  <main class="panel">
-    <div class="stack">
-      <BaseCard>
-        <div class="hero">
-          <SectionHeader
-            compact
-            eyebrow="Current Page"
-            title="当前页面归档"
-            subtitle="先理解当前页面，再推荐去向。你确认后，插件才会真正写入浏览器书签。" />
-          <div class="hero-actions">
-            <BaseButton @click="openWorkspace">
-              <font-awesome-icon icon="gear" />
-              打开管理台
-            </BaseButton>
-            <BaseButton variant="primary" @click="refreshCapture">
-              <font-awesome-icon icon="rotate-right" />
-              重新抓取
-            </BaseButton>
-          </div>
-        </div>
-      </BaseCard>
-
-      <BaseCard>
-        <SectionHeader compact title="默认抓取分类" />
-        <div class="quick-facts">
-          <div
-            v-for="fact in quickFacts"
-            :key="fact.label"
-            class="quick-fact-item">
-            <span class="quick-fact-label">{{ fact.label }}</span>
-            <span class="quick-fact-value">{{ fact.value }}</span>
-          </div>
-        </div>
-        <BaseButton
-          :disabled="isLoading || !capture?.page.url"
-          @click="quickCapture">
-          <font-awesome-icon icon="bolt" />
-          一键抓取
-        </BaseButton>
-      </BaseCard>
-
-      <BaseCard>
-        <div class="row">
-          <strong>当前页面</strong>
-          <span class="muted">{{
-            activeModelLabel !== "未配置 AI 模型"
-              ? `模型：${activeModelLabel}`
-              : "未配置 AI 模型"
-          }}</span>
-        </div>
-        <div class="title">{{ capture?.page.title || "未识别标题" }}</div>
-        <div class="muted break">
-          {{ capture?.page.url || "当前标签页没有标准网页地址。" }}
-        </div>
-        <textarea class="field" readonly rows="6" :value="pageSummary" />
-      </BaseCard>
-
-      <BaseCard>
-        <SectionHeader compact title="增强信息" />
-        <FormField label="手动标签" hint="使用英文逗号分隔">
-          <input
-            v-model="manualTags"
-            class="field"
-            placeholder="例如：AI, 插件开发, 浏览器" />
-        </FormField>
-        <FormField label="补充备注">
-          <textarea
-            v-model="notes"
-            class="field"
-            rows="4"
-            placeholder="这条书签为什么重要，后续会怎么用" />
-        </FormField>
-      </BaseCard>
-
-      <BaseCard>
-        <div class="row">
-          <strong>分类推荐</strong>
-          <BaseButton
-            :disabled="!canRecommend || isLoading"
-            variant="accent"
-            @click="runRecommendation">
-            <font-awesome-icon icon="wand-magic-sparkles" />
-            开始推荐
-          </BaseButton>
-        </div>
-
-        <div v-if="recommendation" class="suggestions">
-          <SuggestionCard
-            v-for="item in recommendation.suggestions"
-            :key="item.key"
-            :selected="item.key === selectedTarget"
-            :suggestion="item"
-            @select="selectedTarget = $event" />
-
-          <FormField
-            v-if="selectedSuggestion?.type === 'create'"
-            label="新建文件夹名称">
-            <input v-model="newFolderTitle" class="field" />
-          </FormField>
-
-          <BaseButton
-            :disabled="isLoading || !selectedSuggestion"
-            variant="primary"
-            @click="applyRecommendation">
-            <font-awesome-icon icon="folder-tree" />
-            确认并写入书签
-          </BaseButton>
-        </div>
-        <div v-else class="muted">
-          点击“开始推荐”后，系统会结合当前页面、你的备注和现有书签结构生成候选文件夹。
-        </div>
-      </BaseCard>
-
-      <BaseCard>
-        <strong>运行状态</strong>
-        <div class="status">{{ status }}</div>
-        <div v-if="result" class="muted">
-          已处理书签：{{ result.bookmark.title }} → {{ result.folderPath }}
-        </div>
-      </BaseCard>
+  <div class="popup">
+    <!-- 头部 -->
+    <div class="popup__header">
+      <div class="popup__logo">📚</div>
+      <div>
+        <div class="popup__title">知识库</div>
+        <div class="popup__subtitle">本地优先的网页知识采集工具</div>
+      </div>
     </div>
-  </main>
+
+    <!-- 今日统计 -->
+    <div class="popup__stat">
+      <div class="popup__stat-number">{{ isLoading ? "–" : todayCount }}</div>
+      <div class="popup__stat-label">今日已保存</div>
+    </div>
+
+    <!-- 最近保存 -->
+    <div class="popup__section">
+      <div class="popup__section-title">最近保存</div>
+      <div v-if="isLoading" class="popup__empty">加载中…</div>
+      <div v-else-if="recentItems.length === 0" class="popup__empty">
+        还没有保存任何内容。<br />
+        <span class="popup__empty-hint"
+          >在网页右下角点击悬浮按钮开始保存。</span
+        >
+      </div>
+      <div v-else class="popup__recent-list">
+        <a
+          v-for="item in recentItems"
+          :key="item.id"
+          :href="item.url"
+          target="_blank"
+          class="popup__recent-item">
+          <div class="popup__recent-title" :title="item.title">
+            {{ item.title || "无标题" }}
+          </div>
+          <div class="popup__recent-meta">
+            <span class="popup__recent-cat">{{ item.category }}</span>
+            <span class="popup__recent-time">{{
+              formatTime(item.createdAt)
+            }}</span>
+          </div>
+        </a>
+      </div>
+    </div>
+
+    <!-- 操作按钮 -->
+    <div class="popup__actions">
+      <button class="popup__btn popup__btn--primary" @click="openKnowledgeBase">
+        📖 打开知识库
+      </button>
+      <button class="popup__btn popup__btn--secondary" @click="openHistory">
+        🗂️ 历史书签整理
+      </button>
+      <button class="popup__btn popup__btn--secondary" @click="openSettings">
+        ⚙️ 设置
+      </button>
+    </div>
+  </div>
 </template>
 
 <style scoped>
-.panel {
-  width: 460px;
-  min-height: 700px;
-  padding: var(--sf-space-4);
-  background: radial-gradient(
-    circle at top left,
-    #fff6df 0%,
-    #fffdf7 35%,
-    #f4f7fb 100%
-  );
-  color: var(--sf-color-text);
-  font-family: var(--sf-font-family);
-}
-
-.stack {
+.popup {
+  width: 300px;
+  min-height: 360px;
+  background: #fff;
+  font-family: "SF Pro Text", "Segoe UI", "PingFang SC", sans-serif;
+  color: #172033;
   display: flex;
   flex-direction: column;
-  gap: var(--sf-space-3);
+  gap: 0;
 }
 
-.hero {
+.popup__header {
   display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: var(--sf-space-3);
-}
-
-.hero-actions {
-  display: flex;
-  gap: var(--sf-space-2);
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
-
-.muted {
-  color: var(--sf-color-text-muted);
-  font-size: var(--sf-font-size-sm);
-  line-height: var(--sf-line-height-normal);
-}
-
-.quick-facts {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: var(--sf-space-2);
-  margin-bottom: var(--sf-space-3);
-}
-
-.quick-fact-item {
-  display: flex;
-  justify-content: space-between;
   align-items: center;
-  gap: var(--sf-space-2);
-  border: 1px solid var(--sf-color-border);
-  border-radius: var(--sf-radius-sm);
-  padding: var(--sf-space-2) var(--sf-space-3);
-  background: #fafcff;
+  gap: 10px;
+  padding: 16px 16px 12px;
+  border-bottom: 1px solid rgba(23, 32, 51, 0.08);
 }
 
-.quick-fact-label {
-  font-size: var(--sf-font-size-sm);
-  font-weight: 700;
-  color: #4c5a76;
+.popup__logo {
+  font-size: 24px;
+  line-height: 1;
 }
 
-.quick-fact-value {
-  font-size: var(--sf-font-size-sm);
-  color: #1f2d46;
+.popup__title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #172033;
+  line-height: 1.3;
 }
 
-.row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: var(--sf-space-2);
-  margin-bottom: var(--sf-space-2);
+.popup__subtitle {
+  font-size: 11px;
+  color: #9ca3af;
+  margin-top: 2px;
 }
 
-.title {
-  font-size: var(--sf-font-size-lg);
-  font-weight: 700;
-  margin-bottom: var(--sf-space-1);
-}
-
-.break {
-  word-break: break-all;
-  margin-bottom: var(--sf-space-2);
-}
-
-.field {
-  width: 100%;
-  min-height: var(--sf-button-height);
-  padding: var(--sf-space-2) var(--sf-space-3);
-  border-radius: var(--sf-radius-md);
-  border: 1px solid #cfd8e3;
-  background: var(--sf-color-surface);
-  box-sizing: border-box;
-  font-size: var(--sf-font-size-md);
-  color: var(--sf-color-text);
-  resize: vertical;
-  margin-top: var(--sf-space-1);
-}
-
-.suggestions {
+.popup__stat {
   display: flex;
   flex-direction: column;
-  gap: var(--sf-space-2);
+  align-items: center;
+  padding: 20px 16px 16px;
+  border-bottom: 1px solid rgba(23, 32, 51, 0.06);
 }
 
-.status {
-  font-size: var(--sf-font-size-md);
-  line-height: var(--sf-line-height-relaxed);
-  margin-top: var(--sf-space-2);
+.popup__stat-number {
+  font-size: 36px;
+  font-weight: 700;
+  color: #172033;
+  line-height: 1;
+}
+
+.popup__stat-label {
+  font-size: 12px;
+  color: #9ca3af;
+  margin-top: 4px;
+}
+
+.popup__section {
+  flex: 1;
+  padding: 12px 16px;
+}
+
+.popup__section-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 8px;
+}
+
+.popup__empty {
+  font-size: 12px;
+  color: #9ca3af;
+  text-align: center;
+  padding: 12px 0;
+  line-height: 1.6;
+}
+
+.popup__empty-hint {
+  font-size: 11px;
+  color: #c4c9d4;
+}
+
+.popup__recent-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.popup__recent-item {
+  display: block;
+  padding: 8px 10px;
+  border-radius: 8px;
+  text-decoration: none;
+  color: inherit;
+  transition: background 0.15s;
+}
+
+.popup__recent-item:hover {
+  background: #f6f8fb;
+}
+
+.popup__recent-title {
+  font-size: 13px;
+  color: #172033;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.4;
+}
+
+.popup__recent-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.popup__recent-cat {
+  font-size: 11px;
+  background: #f0f4ff;
+  color: #4b6cb7;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.popup__recent-time {
+  font-size: 11px;
+  color: #c4c9d4;
+}
+
+.popup__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 16px 16px;
+  border-top: 1px solid rgba(23, 32, 51, 0.08);
+}
+
+.popup__btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 9px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  font-family: inherit;
+  transition:
+    opacity 0.15s,
+    background 0.15s;
+  text-align: center;
+}
+
+.popup__btn--primary {
+  background: #172033;
+  color: #fff;
+}
+
+.popup__btn--primary:hover {
+  opacity: 0.85;
+}
+
+.popup__btn--secondary {
+  background: #f6f8fb;
+  color: #172033;
+}
+
+.popup__btn--secondary:hover {
+  background: #e9ecf0;
 }
 </style>

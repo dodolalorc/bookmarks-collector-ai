@@ -34,10 +34,12 @@
       "storage",
       "bookmarks",
       "tabs",
-      "activeTab"
+      "activeTab",
+      "scripting"
     ],
     "host_permissions": [
-      "https://*/*"
+      "https://*/*",
+      "http://*/*"
     ]
   }
 }

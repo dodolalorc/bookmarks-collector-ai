@@ -6,6 +6,7 @@ export const GITHUB_REPO_URL = "https://github.com/dodolalorc/bookmarks-collecto
 export const STORAGE_KEYS = {
   settings: "bookmarks-collector/settings",
   knowledge: "bookmarks-collector/knowledge",
+  knowledgeItems: "bookmarks-collector/knowledge-items",
   analytics: "bookmarks-collector/analytics",
   drafts: "bookmarks-collector/drafts",
   collections: "bookmarks-collector/collections",

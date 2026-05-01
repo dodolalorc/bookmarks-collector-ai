@@ -37,6 +37,9 @@ import {
   updateSnippetFolder,
   updateCapturedSnippet
 } from "~/src/sdk/storage"
+import { knowledgeStorage } from "~/src/services/knowledgeStorage"
+import { aiService } from "~/src/services/aiService"
+import type { KnowledgeQuery, QuickSavePayload } from "~/src/types/knowledge"
 import type {
   ApplyBookmarkPayload,
   BookmarkMoveDecision,
@@ -182,6 +185,47 @@ async function handleMessage(message: { type: string; payload?: unknown }) {
       return handleMoveSnippetItem(message.payload as MoveCollectionItemPayload)
     case "bookmarks-collector/delete-snippet-item":
       return handleDeleteSnippetItem(message.payload as DeleteCollectionItemPayload)
+
+    // ── Knowledge Base (new) ──────────────────────────────
+    case "knowledge/quick-save":
+      return handleKnowledgeQuickSave(message.payload as Partial<QuickSavePayload>)
+    case "knowledge/generate-quick-meta":
+      return handleKnowledgeGenerateQuickMeta(message.payload as Partial<QuickSavePayload>)
+    case "knowledge/save-with-meta":
+      return handleKnowledgeSaveWithMeta(
+        message.payload as Partial<QuickSavePayload> & {
+          summary?: string
+          tags?: string[]
+          category?: string
+        }
+      )
+    case "knowledge/save-selection":
+      return handleKnowledgeSaveSelection(
+        message.payload as { selectedText: string }
+      )
+    case "knowledge/list":
+      return knowledgeStorage.list(message.payload as KnowledgeQuery)
+    case "knowledge/update":
+      return knowledgeStorage.update(
+        (message.payload as { id: string }).id,
+        message.payload as Record<string, unknown>
+      )
+    case "knowledge/delete":
+      return knowledgeStorage.delete((message.payload as { id: string }).id)
+    case "knowledge/retry-ai":
+      return handleKnowledgeRetryAi((message.payload as { id: string }).id)
+    case "knowledge/get-today-count":
+      return knowledgeStorage.getTodayCount()
+    case "knowledge/get-recent":
+      return knowledgeStorage.list({
+        orderBy: "createdAt",
+        orderDir: "desc",
+        limit: (message.payload as { limit?: number })?.limit ?? 3
+      })
+    case "knowledge/open-knowledge-base":
+      await handleOpenExtensionPage({ path: "options.html#knowledge-base" })
+      return { success: true }
+
     default:
       throw new Error(`Unsupported message type: ${message.type}`)
   }
@@ -577,4 +621,206 @@ async function notifyBookmarkCreated(url: string) {
         }).catch(() => undefined)
       )
   )
+}
+
+// ── Knowledge Base Handlers ──────────────────────────────────────────────
+
+async function getPageContentFromActiveTab(): Promise<{
+  title: string
+  url: string
+  content: string
+  excerpt?: string
+  siteName?: string
+}> {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
+  if (!tab?.id || !tab.url) {
+    throw new Error("当前没有可读取的网页标签页。")
+  }
+
+  if (
+    tab.url.startsWith("chrome://") ||
+    tab.url.startsWith("edge://") ||
+    tab.url.startsWith("about:")
+  ) {
+    return {
+      title: tab.title ?? "系统页面",
+      url: tab.url,
+      content: ""
+    }
+  }
+
+  // Inject content extractor script into the tab
+  const results = await chrome.scripting.executeScript({
+    target: { tabId: tab.id },
+    func: () => {
+      const NOISE_SELECTORS = [
+        "script", "style", "noscript", "nav", "aside", "footer",
+        "header nav", "[role='navigation']", ".advertisement", ".ads",
+        ".sidebar", ".comments", ".breadcrumb", ".pagination"
+      ].join(", ")
+
+      function readMeta(selector: string) {
+        return document.querySelector(selector)?.getAttribute("content")?.trim() ?? ""
+      }
+
+      function sanitize(root: Element): Element {
+        const clone = root.cloneNode(true) as Element
+        clone.querySelectorAll(NOISE_SELECTORS).forEach((n) => n.remove())
+        return clone
+      }
+
+      function normalize(text: string) {
+        return text.replace(/\u00a0/g, " ").replace(/\n{3,}/g, "\n\n").replace(/[ \t]{2,}/g, " ").trim()
+      }
+
+      const SELECTORS = ["article", "main", ".content", ".post-content", ".article-content", ".markdown-body", ".entry-content"]
+      let text = ""
+      for (const sel of SELECTORS) {
+        const el = document.querySelector(sel)
+        if (el) {
+          const t = normalize(sanitize(el).textContent ?? "")
+          if (t.length > 200) { text = t; break }
+        }
+      }
+      if (!text) {
+        text = normalize(sanitize(document.body).textContent ?? "")
+      }
+
+      return {
+        title: document.title || readMeta('meta[property="og:title"]') || "",
+        url: location.href,
+        content: text,
+        excerpt: readMeta('meta[name="description"]') || readMeta('meta[property="og:description"]') || "",
+        siteName: readMeta('meta[property="og:site_name"]') || location.hostname || ""
+      }
+    }
+  })
+
+  const result = results[0]?.result
+  if (!result) throw new Error("无法提取页面内容，请刷新后重试。")
+  return result
+}
+
+async function handleKnowledgeQuickSave(
+  payload: Partial<QuickSavePayload>
+) {
+  const pageData = await getPageContentFromActiveTab()
+  const settings = await getSettings()
+
+  let meta: { summary: string; tags: string[]; category: string; subCategory?: string } = {
+    summary: "",
+    tags: [],
+    category: "其他",
+    subCategory: undefined
+  }
+
+  try {
+    const aiMeta = await aiService.generateQuickMeta(
+      pageData.title,
+      pageData.content,
+      settings
+    )
+    meta = aiMeta
+  } catch {
+    // AI failure - save without metadata, status = failed
+  }
+
+  const item = await knowledgeStorage.create({
+    title: pageData.title,
+    url: pageData.url,
+    content: pageData.content,
+    excerpt: pageData.excerpt,
+    siteName: pageData.siteName,
+    sourceType: payload.sourceType ?? "page",
+    summary: meta.summary || undefined,
+    tags: meta.tags,
+    category: meta.category,
+    subCategory: meta.subCategory,
+    aiStatus: meta.summary ? "success" : "failed"
+  })
+
+  return item
+}
+
+async function handleKnowledgeGenerateQuickMeta(
+  _payload: Partial<QuickSavePayload>
+) {
+  const pageData = await getPageContentFromActiveTab()
+  const settings = await getSettings()
+  return aiService.generateQuickMeta(pageData.title, pageData.content, settings)
+}
+
+async function handleKnowledgeSaveWithMeta(
+  payload: Partial<QuickSavePayload> & {
+    summary?: string
+    tags?: string[]
+    category?: string
+  }
+) {
+  const pageData = await getPageContentFromActiveTab()
+
+  const item = await knowledgeStorage.create({
+    title: payload.title ?? pageData.title,
+    url: pageData.url,
+    content: pageData.content,
+    excerpt: pageData.excerpt,
+    siteName: pageData.siteName,
+    sourceType: payload.sourceType ?? "page",
+    summary: payload.summary,
+    tags: payload.tags ?? [],
+    category: payload.category ?? "其他",
+    aiStatus: "success"
+  })
+
+  return item
+}
+
+async function handleKnowledgeSaveSelection(payload: { selectedText: string }) {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
+  const settings = await getSettings()
+
+  let meta: { summary: string; tags: string[]; category: string; subCategory?: string } = {
+    summary: "",
+    tags: [],
+    category: "其他",
+    subCategory: undefined
+  }
+
+  try {
+    const aiMeta = await aiService.generateQuickMeta(
+      tab?.title ?? "",
+      payload.selectedText,
+      settings
+    )
+    meta = aiMeta
+  } catch {
+    // AI failure
+  }
+
+  return knowledgeStorage.create({
+    title: tab?.title ?? "选中文本",
+    url: tab?.url ?? "",
+    content: payload.selectedText,
+    sourceType: "selection",
+    summary: meta.summary || undefined,
+    tags: meta.tags,
+    category: meta.category,
+    aiStatus: meta.summary ? "success" : "failed"
+  })
+}
+
+async function handleKnowledgeRetryAi(id: string) {
+  const item = await knowledgeStorage.getById(id)
+  if (!item) throw new Error("知识条目不存在")
+
+  const settings = await getSettings()
+  const meta = await aiService.generateQuickMeta(item.title, item.content, settings)
+
+  return knowledgeStorage.update(id, {
+    summary: meta.summary,
+    tags: meta.tags,
+    category: meta.category,
+    subCategory: meta.subCategory,
+    aiStatus: "success"
+  })
 }
