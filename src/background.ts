@@ -223,7 +223,7 @@ async function handleMessage(message: { type: string; payload?: unknown }) {
         limit: (message.payload as { limit?: number })?.limit ?? 3
       })
     case "knowledge/open-knowledge-base":
-      await handleOpenExtensionPage({ path: "options.html#knowledge-base" })
+      await handleOpenExtensionPage({ path: "tabs/manage.html#knowledge-base" })
       return { success: true }
 
     default:
@@ -422,20 +422,11 @@ async function handleOpenExtensionPage(payload: ExtensionPageOpenPayload) {
     return { success: true }
   }
 
+  // Backward compatibility: old callers may still pass options.html#...
+  // This project now uses tabs/manage.html as the only management page.
   if (normalizedPath.startsWith("options.html")) {
-    const optionsUrl = chrome.runtime.getURL(normalizedPath)
-
-    if (normalizedPath === "options.html") {
-      try {
-        await chrome.runtime.openOptionsPage()
-        return { success: true }
-      } catch {
-        await chrome.tabs.create({ url: optionsUrl })
-        return { success: true }
-      }
-    }
-
-    await chrome.tabs.create({ url: optionsUrl })
+    const mappedPath = normalizedPath.replace("options.html", "tabs/manage.html")
+    await chrome.tabs.create({ url: chrome.runtime.getURL(mappedPath) })
     return { success: true }
   }
 

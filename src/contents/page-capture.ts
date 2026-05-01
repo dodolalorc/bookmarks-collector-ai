@@ -265,6 +265,24 @@ const openExtensionPage = async (path: string) => {
     path
   })
 }
+
+const quickSaveToKnowledge = async () => {
+  state.status = "正在保存到知识库…"
+  renderOverlay()
+
+  try {
+    await sendMessage("knowledge/quick-save", {
+      sourceType: "page"
+    })
+    state.status = "已保存到知识库。"
+  } catch (error) {
+    state.status =
+      error instanceof Error ? error.message : "保存到知识库失败，请稍后重试。"
+  } finally {
+    renderOverlay()
+  }
+}
+
 const renderOverlay = () => {
   state.selectionText = getCurrentSelectionText()
   applyViewportInset()
@@ -282,12 +300,24 @@ const renderOverlay = () => {
       applyViewportInset()
       renderOverlay()
     },
+    onOpenSidebar: () => {
+      state.sidebarOpen = true
+      applyViewportInset()
+      state.status = "已打开页面抓取面板。"
+      renderOverlay()
+    },
     onToggleAiDialog: () => {
       state.aiDialogOpen = !state.aiDialogOpen
       if (state.aiDialogOpen) {
         hydrateArticleFields(getPageContext())
         void hydrateModels()
       }
+      renderOverlay()
+    },
+    onOpenAiDialog: () => {
+      state.aiDialogOpen = true
+      hydrateArticleFields(getPageContext())
+      void hydrateModels()
       renderOverlay()
     },
     onCloseAiDialog: () => {
@@ -323,6 +353,13 @@ const renderOverlay = () => {
       state.status = state.elementPickMode
         ? "框选模式已开启，点击页面区域即可抓取一段内容。"
         : "框选模式已关闭。"
+      renderOverlay()
+    },
+    onStartElementMode: () => {
+      state.elementPickMode = true
+      state.sidebarOpen = true
+      applyViewportInset()
+      state.status = "框选模式已开启，点击页面区域即可抓取一段内容。"
       renderOverlay()
     },
     onDeleteSnippet: (snippetId: string) => {
@@ -406,9 +443,9 @@ const renderOverlay = () => {
         state.articleSegments = state.articleSegments.map((segment) =>
           segment.id === payload.segmentId
             ? {
-                ...segment,
-                selected: payload.segmentSelected
-              }
+              ...segment,
+              selected: payload.segmentSelected
+            }
             : segment
         )
       }
@@ -426,6 +463,9 @@ const renderOverlay = () => {
         selected
       }))
       renderOverlay()
+    },
+    onQuickSaveToKnowledge: () => {
+      void quickSaveToKnowledge()
     },
     onClassifyNow: () => {
       state.bookmarkPromptVisible = false
@@ -680,6 +720,23 @@ const bindElementPicker = () => {
   )
 }
 
+const openCaptureSidebarFromFloatingMenu = () => {
+  state.sidebarOpen = true
+  state.bookmarkPromptVisible = false
+  applyViewportInset()
+  state.status = "已打开页面抓取面板。"
+  renderOverlay()
+}
+
+const startElementModeFromFloatingMenu = () => {
+  state.elementPickMode = true
+  state.sidebarOpen = true
+  state.bookmarkPromptVisible = false
+  applyViewportInset()
+  state.status = "框选模式已开启，点击页面区域即可抓取一段内容。"
+  renderOverlay()
+}
+
 ensureCaptureStyles()
 
 document.addEventListener("selectionchange", () => {
@@ -709,6 +766,14 @@ window.addEventListener("scroll", () => {
   if (state.selectionAnchorVisible) {
     updateSelectionAnchor()
   }
+})
+
+window.addEventListener("kc-page-capture-open-sidebar", () => {
+  openCaptureSidebarFromFloatingMenu()
+})
+
+window.addEventListener("kc-page-capture-start-element-mode", () => {
+  startElementModeFromFloatingMenu()
 })
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {

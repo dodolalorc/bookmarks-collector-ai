@@ -51,11 +51,14 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   toggleSidebar: []
+  openSidebar: []
   toggleAiDialog: []
+  openAiDialog: []
   closeAiDialog: []
   startSidebarResize: [event: MouseEvent]
   captureSelection: []
   toggleElementMode: []
+  startElementMode: []
   deleteSnippet: [snippetId: string]
   analyzeSnippet: [snippetId: string]
   saveTags: [payload: { snippetId: string; tags: string[] }]
@@ -88,24 +91,12 @@ const emit = defineEmits<{
 }>()
 
 const FLOATING_BALL_TOP = 84
-const FLOATING_BALL_GAP = 14
-const FLOATING_BALL_SIZE = 38
 
 const pageEdgeOffset = computed(() =>
   props.state.sidebarOpen ? props.state.sidebarWidth + 20 : 20
 )
 
 const promptRight = computed(() => `${pageEdgeOffset.value + 52}px`)
-
-const sidebarBallStyle = computed(() => ({
-  right: `${pageEdgeOffset.value}px`,
-  top: `${FLOATING_BALL_TOP}px`
-}))
-
-const aiBallStyle = computed(() => ({
-  right: `${pageEdgeOffset.value}px`,
-  top: `${FLOATING_BALL_TOP + FLOATING_BALL_SIZE + FLOATING_BALL_GAP}px`
-}))
 
 const selectionPromptStyle = computed(() => ({
   top: `${props.state.selectionAnchor.top + 22}px`,
@@ -213,22 +204,6 @@ const onSegmentToggle = (segmentId: string, selected: boolean) => {
         </button>
       </div>
     </div>
-
-    <button
-      class="floating-ball"
-      :style="sidebarBallStyle"
-      title="打开页面知识抓取面板"
-      @click.stop="emit('toggleSidebar')">
-      <font-awesome-icon icon="wand-magic-sparkles" />
-    </button>
-
-    <button
-      class="floating-ball floating-ball-ai"
-      :style="aiBallStyle"
-      title="打开 AI 页面整理弹窗"
-      @click.stop="emit('toggleAiDialog')">
-      <font-awesome-icon icon="brain" />
-    </button>
 
     <aside
       class="page-sidebar"
@@ -570,31 +545,6 @@ const onSegmentToggle = (segmentId: string, selected: boolean) => {
   gap: var(--sf-space-2);
   align-items: center;
   flex-wrap: wrap;
-}
-
-.floating-ball {
-  --ball-size: 38px;
-  position: fixed;
-  pointer-events: auto;
-  z-index: 2147483647;
-  width: var(--ball-size);
-  height: var(--ball-size);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  border-radius: 50%;
-  border: 2px solid rgba(255, 255, 255, 0.96);
-  outline: 1px solid rgba(74, 107, 164, 0.52);
-  background: var(--sf-color-surface-soft);
-  box-shadow:
-    0 10px 24px rgba(57, 93, 156, 0.4),
-    0 0 0 3px rgba(168, 216, 255, 0.22);
-  cursor: pointer;
-}
-
-.floating-ball-ai {
-  background: var(--sf-color-surface-soft);
 }
 
 .selection-anchor-wrap {
@@ -1156,8 +1106,6 @@ const onSegmentToggle = (segmentId: string, selected: boolean) => {
   color: var(--sf-color-text) !important;
 }
 
-.floating-ball,
-.floating-ball-ai,
 .selection-anchor {
   background: var(--sf-color-primary) !important;
   outline: none !important;

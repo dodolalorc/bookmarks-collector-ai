@@ -39,11 +39,13 @@ function openKnowledgeBase() {
 }
 
 function openHistory() {
-  chrome.tabs.create({ url: chrome.runtime.getURL("options.html#history") })
+  chrome.tabs.create({ url: chrome.runtime.getURL("tabs/manage.html#history") })
 }
 
 function openSettings() {
-  chrome.tabs.create({ url: chrome.runtime.getURL("options.html#settings") })
+  chrome.tabs.create({
+    url: chrome.runtime.getURL("tabs/manage.html#settings")
+  })
 }
 
 function formatTime(ts: number) {

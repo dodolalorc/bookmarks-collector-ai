@@ -4,17 +4,32 @@
     <div
       class="kc-ball"
       :class="{ 'kc-ball--open': menuOpen, 'kc-ball--saving': isSaving }"
+      @mouseenter="openMenu"
+      @mouseleave="scheduleCloseMenu"
       @click="handleBallClick"
-      @contextmenu.prevent="toggleMenu"
       title="保存到知识库">
       <span v-if="isSaving" class="kc-ball__spinner">⏳</span>
       <span v-else-if="saveSuccess" class="kc-ball__icon">✓</span>
-      <span v-else class="kc-ball__icon">📚</span>
+      <img
+        v-else
+        class="kc-ball__icon-img"
+        :src="floatingBallIconUrl"
+        alt="保存到知识库" />
     </div>
 
     <!-- 展开菜单 -->
     <Transition name="kc-menu">
-      <div v-if="menuOpen" class="kc-menu">
+      <div
+        v-if="menuOpen"
+        class="kc-menu"
+        @mouseenter="openMenu"
+        @mouseleave="scheduleCloseMenu">
+        <button class="kc-menu__item" @click="openCaptureSidebar">
+          <span class="kc-menu__icon">📑</span>抓取侧边栏
+        </button>
+        <button class="kc-menu__item" @click="startElementCapture">
+          <span class="kc-menu__icon">🧩</span>框选模式抓取
+        </button>
         <button class="kc-menu__item" @click="quickSave">
           <span class="kc-menu__icon">⚡</span>快速保存
         </button>
@@ -107,9 +122,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from "vue"
+import { onMounted, onUnmounted, ref } from "vue"
 
 import { KNOWLEDGE_CATEGORIES } from "../types/knowledge"
+import floatingBallIconUrl from "./icon.png"
 
 const hidden = ref(false)
 const menuOpen = ref(false)
@@ -131,6 +147,7 @@ const editCategory = ref("其他")
 const categories = KNOWLEDGE_CATEGORIES
 
 const selectionText = ref("")
+let menuCloseTimer: number | undefined
 
 // 监听文字选中
 function onSelectionChange() {
@@ -145,6 +162,9 @@ onMounted(() => {
 
 onUnmounted(() => {
   document.removeEventListener("selectionchange", onSelectionChange)
+  if (menuCloseTimer) {
+    window.clearTimeout(menuCloseTimer)
+  }
 })
 
 function handleBallClick() {
@@ -155,12 +175,35 @@ function handleBallClick() {
   }
 }
 
-function toggleMenu() {
-  menuOpen.value = !menuOpen.value
+function openMenu() {
+  if (menuCloseTimer) {
+    window.clearTimeout(menuCloseTimer)
+    menuCloseTimer = undefined
+  }
+  menuOpen.value = true
+}
+
+function scheduleCloseMenu() {
+  if (menuCloseTimer) {
+    window.clearTimeout(menuCloseTimer)
+  }
+  menuCloseTimer = window.setTimeout(() => {
+    menuOpen.value = false
+  }, 120)
 }
 
 function closeMenu() {
   menuOpen.value = false
+}
+
+function openCaptureSidebar() {
+  closeMenu()
+  window.dispatchEvent(new CustomEvent("kc-page-capture-open-sidebar"))
+}
+
+function startElementCapture() {
+  closeMenu()
+  window.dispatchEvent(new CustomEvent("kc-page-capture-start-element-mode"))
 }
 
 function closePanel() {
@@ -323,8 +366,9 @@ function openKnowledgeBase() {
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  background: #1b1b22;
-  color: #fff;
+  background: #fff;
+  color: #1b1b22;
+  border: 1px solid rgba(27, 27, 34, 0.16);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -344,15 +388,23 @@ function openKnowledgeBase() {
 
 .kc-ball--saving {
   background: #6b6870;
+  color: #fff;
 }
 
 .kc-ball--open {
-  background: #3960a8;
+  background: #f5f4f0;
 }
 
 .kc-ball__icon {
   font-size: 16px;
   line-height: 1;
+}
+
+.kc-ball__icon-img {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+  display: block;
 }
 
 /* Context menu — clean paper popup */
