@@ -2,11 +2,11 @@
 import { computed, onMounted, ref } from "vue"
 
 import { SmartFavoritesSDK } from "../sdk/client"
-import { getProviderConfigNotice, resolveProvider } from "../sdk/provider"
 import {
   DEFAULT_PROMPT_TEMPLATE,
   DEFAULT_SYSTEM_PROMPT
 } from "../sdk/constants"
+import { getProviderConfigNotice, resolveProvider } from "../sdk/provider"
 import type {
   AiModelProfile,
   BookmarkMoveDecision,
@@ -24,12 +24,17 @@ import FormField from "../ui/FormField.vue"
 import SectionHeader from "../ui/SectionHeader.vue"
 import CollectionSnippetCard from "./CollectionSnippetCard.vue"
 import HistoryItemCard from "./HistoryItemCard.vue"
+import KnowledgeBase from "./KnowledgeBase.vue"
 
 const sdk = new SmartFavoritesSDK()
 
 const resolveTabFromHash = () => {
   if (location.hash === "#history") {
     return "history" as const
+  }
+
+  if (location.hash === "#knowledge-base") {
+    return "knowledge-base" as const
   }
 
   if (location.hash === "#knowledge") {
@@ -68,7 +73,9 @@ const buildDistribution = (entries: string[], limit = 8) => {
 const importInput = ref<HTMLInputElement | null>(null)
 const settings = ref<SmartFavoritesSettings | null>(null)
 const status = ref("正在加载设置…")
-const tab = ref<"settings" | "history" | "knowledge">(resolveTabFromHash())
+const tab = ref<"settings" | "history" | "knowledge" | "knowledge-base">(
+  resolveTabFromHash()
+)
 const historyItems = ref<HistoryRecommendationItem[]>([])
 const selectedIds = ref<string[]>([])
 const historyStatus = ref("正在加载历史书签推荐…")
@@ -213,7 +220,9 @@ const updateSettings = (next: SmartFavoritesSettings) => {
   settings.value = next
 }
 
-const syncActiveProviderView = (next: SmartFavoritesSettings): SmartFavoritesSettings => {
+const syncActiveProviderView = (
+  next: SmartFavoritesSettings
+): SmartFavoritesSettings => {
   const activeProvider =
     next.providers.find((provider) => provider.id === next.activeProviderId) ??
     next.providers[0]
@@ -313,7 +322,9 @@ const importBackup = async (event: Event) => {
       `${result.draftCount} 个页面草稿，${result.collectionItemCount} 条内容片段。`
   } catch (error) {
     status.value =
-      error instanceof Error ? `导入失败：${error.message}` : "导入失败，请检查备份文件格式。"
+      error instanceof Error
+        ? `导入失败：${error.message}`
+        : "导入失败，请检查备份文件格式。"
   } finally {
     target.value = ""
   }
@@ -342,7 +353,9 @@ const applySelected = async () => {
   const selectedItems = historyItems.value.filter((item) =>
     selectedIds.value.includes(item.bookmark.id)
   )
-  const result = await sdk.applyBulkBookmarkRecommendations(selectedDecisions.value)
+  const result = await sdk.applyBulkBookmarkRecommendations(
+    selectedDecisions.value
+  )
   await Promise.all(
     selectedItems.map((item, index) =>
       sdk.recordExperimentEvent({
@@ -360,9 +373,11 @@ const applySelected = async () => {
         selectedRank: 1,
         top1Accepted: true,
         top3Covered: item.recommendation.suggestions.length > 0,
-        recommendedPaths: item.recommendation.suggestions.map((suggestion) => suggestion.path)
+        recommendedPaths: item.recommendation.suggestions.map(
+          (suggestion) => suggestion.path
+        )
       })
-  )
+    )
   )
   historyStatus.value = `已迁移 ${result.moved} 条书签。`
   await Promise.all([refreshHistory(), loadKnowledgeRecords()])
@@ -377,11 +392,7 @@ const toggleSelected = (id: string) => {
 const switchTab = (next: "settings" | "history" | "knowledge") => {
   tab.value = next
   location.hash =
-    next === "history"
-      ? "#history"
-      : next === "knowledge"
-        ? "#knowledge"
-        : ""
+    next === "history" ? "#history" : next === "knowledge" ? "#knowledge" : ""
 }
 
 const readInputValue = (event: Event) => {
@@ -730,6 +741,12 @@ const distributionStyle = (ratio: number) => ({
           内容整理
         </BaseButton>
         <BaseButton
+          :variant="tab === 'knowledge-base' ? 'primary' : 'secondary'"
+          @click="switchTab('knowledge-base')">
+          <font-awesome-icon icon="database" />
+          知识库
+        </BaseButton>
+        <BaseButton
           :variant="tab === 'knowledge' ? 'primary' : 'secondary'"
           @click="switchTab('knowledge')">
           <font-awesome-icon icon="book-open" />
@@ -749,10 +766,14 @@ const distributionStyle = (ratio: number) => ({
           title="使用路径"
           subtitle="这个版本把主线收敛成三件事：先配置模型，再在网页里抓取和整理，最后回来看沉淀结果。" />
         <div class="status">
-          {{ activeProviderNotice || "当前模型配置完整，可以直接开始使用页面抓取、AI 整理和书签归档。" }}
+          {{
+            activeProviderNotice ||
+            "当前模型配置完整，可以直接开始使用页面抓取、AI 整理和书签归档。"
+          }}
         </div>
         <div class="quickstart-copy">
-          管理台保留三个入口：模型配置负责接通 AI，内容整理负责管理抓取片段和高级书签迁移，知识笔记负责回看已经沉淀下来的记录。
+          管理台保留三个入口：模型配置负责接通
+          AI，内容整理负责管理抓取片段和高级书签迁移，知识笔记负责回看已经沉淀下来的记录。
         </div>
       </BaseCard>
 
@@ -813,7 +834,9 @@ const distributionStyle = (ratio: number) => ({
             class="field"
             :value="activeProvider.label"
             @input="
-              updateProvider(activeProvider.id, { label: readInputValue($event) })
+              updateProvider(activeProvider.id, {
+                label: readInputValue($event)
+              })
             " />
         </FormField>
         <FormField label="接口基地址">
@@ -821,7 +844,9 @@ const distributionStyle = (ratio: number) => ({
             class="field"
             :value="activeProvider.baseUrl"
             @input="
-              updateProvider(activeProvider.id, { baseUrl: readInputValue($event) })
+              updateProvider(activeProvider.id, {
+                baseUrl: readInputValue($event)
+              })
             " />
         </FormField>
         <FormField label="模型名称">
@@ -829,7 +854,9 @@ const distributionStyle = (ratio: number) => ({
             class="field"
             :value="activeProvider.model"
             @input="
-              updateProvider(activeProvider.id, { model: readInputValue($event) })
+              updateProvider(activeProvider.id, {
+                model: readInputValue($event)
+              })
             " />
         </FormField>
         <FormField label="API Key">
@@ -839,7 +866,9 @@ const distributionStyle = (ratio: number) => ({
               :type="showApiKey ? 'text' : 'password'"
               :value="activeProvider.apiKey"
               @input="
-                updateProvider(activeProvider.id, { apiKey: readInputValue($event) })
+                updateProvider(activeProvider.id, {
+                  apiKey: readInputValue($event)
+                })
               " />
             <button
               v-if="activeProvider.apiKey"
@@ -1097,7 +1126,10 @@ const distributionStyle = (ratio: number) => ({
           <div>
             <SectionHeader compact title="历史书签整理（高级）" />
             <div class="status">
-              {{ historyStatus }} 这部分会调整已有书签目录，适合在确认推荐结果后再批量处理。
+              {{
+                historyStatus
+              }}
+              这部分会调整已有书签目录，适合在确认推荐结果后再批量处理。
             </div>
           </div>
         </div>
@@ -1113,6 +1145,12 @@ const distributionStyle = (ratio: number) => ({
             @toggle="toggleSelected" />
         </div>
       </BaseCard>
+    </template>
+
+    <template v-else-if="tab === 'knowledge-base'">
+      <div class="knowledge-base-wrapper">
+        <KnowledgeBase />
+      </div>
     </template>
 
     <template v-else-if="tab === 'knowledge'">
@@ -1154,7 +1192,9 @@ const distributionStyle = (ratio: number) => ({
                 <span>{{ item.count }} · {{ formatPercent(item.ratio) }}</span>
               </div>
               <div class="distribution-track">
-                <div class="distribution-fill" :style="distributionStyle(item.ratio)" />
+                <div
+                  class="distribution-fill"
+                  :style="distributionStyle(item.ratio)" />
               </div>
             </div>
           </div>
@@ -1169,7 +1209,9 @@ const distributionStyle = (ratio: number) => ({
                 <span>{{ item.count }} · {{ formatPercent(item.ratio) }}</span>
               </div>
               <div class="distribution-track">
-                <div class="distribution-fill warm" :style="distributionStyle(item.ratio)" />
+                <div
+                  class="distribution-fill warm"
+                  :style="distributionStyle(item.ratio)" />
               </div>
             </div>
           </div>
@@ -1183,7 +1225,8 @@ const distributionStyle = (ratio: number) => ({
             class="field"
             placeholder="搜索标题、标签、来源网址、目录路径或备注" />
           <div class="status">
-            当前显示 {{ filteredKnowledgeRecords.length }} / {{ knowledgeRecords.length }} 条
+            当前显示 {{ filteredKnowledgeRecords.length }} /
+            {{ knowledgeRecords.length }} 条
           </div>
         </div>
       </BaseCard>
@@ -1201,14 +1244,18 @@ const distributionStyle = (ratio: number) => ({
             <div class="knowledge-title">{{ record.title }}</div>
             <div class="knowledge-url">{{ record.url }}</div>
           </div>
-          <div class="knowledge-time">{{ formatKnowledgeTime(record.createdAt) }}</div>
+          <div class="knowledge-time">
+            {{ formatKnowledgeTime(record.createdAt) }}
+          </div>
         </div>
         <div class="knowledge-meta">
           <span>目录：{{ record.folderPath || "未记录" }}</span>
           <span>来源：{{ record.source }}</span>
         </div>
         <div v-if="record.tags.length" class="tag-row">
-          <span v-for="tag in record.tags" :key="tag" class="tag-chip">{{ tag }}</span>
+          <span v-for="tag in record.tags" :key="tag" class="tag-chip">{{
+            tag
+          }}</span>
         </div>
         <div v-if="record.notes" class="knowledge-block">
           <div class="knowledge-label">备注</div>
@@ -1238,6 +1285,14 @@ const distributionStyle = (ratio: number) => ({
   margin: 0 auto var(--sf-space-5);
   padding: var(--sf-space-6);
   border-radius: var(--sf-radius-xl);
+}
+
+.knowledge-base-wrapper {
+  max-width: 1180px;
+  margin: 0 auto;
+  height: calc(100vh - 180px);
+  display: flex;
+  flex-direction: column;
 }
 
 .panel-head,
@@ -1295,7 +1350,11 @@ const distributionStyle = (ratio: number) => ({
 .config-notice,
 .quickstart-hero,
 .quickstart-card {
-  background: linear-gradient(135deg, rgba(255, 247, 224, 0.9), rgba(245, 250, 255, 0.96));
+  background: linear-gradient(
+    135deg,
+    rgba(255, 247, 224, 0.9),
+    rgba(245, 250, 255, 0.96)
+  );
 }
 
 .config-notice {
@@ -1429,7 +1488,11 @@ const distributionStyle = (ratio: number) => ({
 .provider-card.active {
   border-color: rgba(104, 147, 255, 0.42);
   box-shadow: 0 12px 24px rgba(97, 129, 184, 0.12);
-  background: linear-gradient(135deg, rgba(255, 236, 247, 0.92), rgba(236, 248, 255, 0.98));
+  background: linear-gradient(
+    135deg,
+    rgba(255, 236, 247, 0.92),
+    rgba(236, 248, 255, 0.98)
+  );
 }
 
 .provider-card-top {
