@@ -1,6 +1,6 @@
-# bookmarks-collector-ai 项目升级计划（AI Coding 执行版）
+# nuci-ai 项目升级计划（AI Coding 执行版）
 
-> 本文件用于指导 AI Coding Agent 对 `bookmarks-collector-ai` 进行整体升级。  
+> 本文件用于指导 AI Coding Agent 对 `nuci-ai` 进行整体升级。  
 > 核心目标不是砍功能，而是将现有功能重新组织为清晰、可用、可扩展的产品闭环。
 
 ---
@@ -106,7 +106,7 @@ AI 生成摘要、标签、分类、关键点
 ### 3.1 顶层模块
 
 ```text
-bookmarks-collector-ai
+nuci-ai
 ├── 网页采集入口
 │   ├── 悬浮按钮
 │   ├── 快速保存
@@ -1175,14 +1175,14 @@ Obsidian 导出
 ## 18.1 README 新标题
 
 ```text
-Bookmarks Collector AI
+Nuci AI
 本地优先的网页知识采集与整理插件
 ```
 
 ## 18.2 README 核心描述
 
 ```text
-Bookmarks Collector AI 是一个浏览器插件，帮助你在阅读网页时一键保存内容，并使用 AI 自动生成摘要、标签和分类，最终沉淀为可搜索、可导出的个人学习知识库。
+Nuci AI 是一个浏览器插件，帮助你在阅读网页时一键保存内容，并使用 AI 自动生成摘要、标签和分类，最终沉淀为可搜索、可导出的个人学习知识库。
 ```
 
 ## 18.3 README 必须包含

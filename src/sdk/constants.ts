@@ -1,7 +1,7 @@
 import type { SmartFavoritesSettings } from "~/src/sdk/types"
 
 export const DEFAULT_PROVIDER_ID = "default-provider"
-export const GITHUB_REPO_URL = "https://github.com/dodolalorc/bookmarks-collector-ai"
+export const GITHUB_REPO_URL = "https://github.com/dodolalorc/nuci-ai"
 
 export const STORAGE_KEYS = {
   settings: "bookmarks-collector/settings",
