@@ -1,15 +1,23 @@
 <template>
-  <div v-if="!hidden" class="kc-float-root">
-    <!-- 主悬浮球 -->
+  <div
+    v-if="!hidden"
+    class="kc-float-root"
+    :class="[
+      `kc-float-root--${resolvedSide}`,
+      { 'kc-float-root--dragging': isDragging }
+    ]"
+    :style="rootStyle">
     <div
+      ref="ballRef"
       class="kc-ball"
       :class="{ 'kc-ball--open': menuOpen, 'kc-ball--saving': isSaving }"
+      title="保存到知识库"
       @mouseenter="openMenu"
       @mouseleave="scheduleCloseMenu"
-      @click="handleBallClick"
-      title="保存到知识库">
-      <span v-if="isSaving" class="kc-ball__spinner">⏳</span>
-      <span v-else-if="saveSuccess" class="kc-ball__icon">✓</span>
+      @mousedown.prevent="handleBallMouseDown"
+      @click="handleBallClick">
+      <span v-if="isSaving" class="kc-ball__icon">...</span>
+      <span v-else-if="saveSuccess" class="kc-ball__icon">OK</span>
       <img
         v-else
         class="kc-ball__icon-img"
@@ -17,43 +25,61 @@
         alt="保存到知识库" />
     </div>
 
-    <!-- 展开菜单 -->
     <Transition name="kc-menu">
       <div
         v-if="menuOpen"
         class="kc-menu"
+        :class="`kc-menu--${resolvedSide}`"
         @mouseenter="openMenu"
         @mouseleave="scheduleCloseMenu">
         <button class="kc-menu__item" @click="openCaptureSidebar">
-          <span class="kc-menu__icon">📑</span>抓取侧边栏
+          <span class="kc-menu__icon">[]</span>
+          抓取侧边栏
         </button>
         <button class="kc-menu__item" @click="startElementCapture">
-          <span class="kc-menu__icon">🧩</span>框选模式抓取
+          <span class="kc-menu__icon">+</span>
+          框选模式抓取
         </button>
         <button class="kc-menu__item" @click="quickSave">
-          <span class="kc-menu__icon">⚡</span>快速保存
+          <span class="kc-menu__icon">S</span>
+          快速保存
         </button>
         <button class="kc-menu__item" @click="deepSave">
-          <span class="kc-menu__icon">🔍</span>深度保存
+          <span class="kc-menu__icon">D</span>
+          深度保存
         </button>
         <button
           class="kc-menu__item"
-          @click="saveSelection"
-          :disabled="!hasSelection">
-          <span class="kc-menu__icon">✂️</span>保存选中文本
+          :disabled="!hasSelection"
+          @click="saveSelection">
+          <span class="kc-menu__icon">T</span>
+          保存选中文本
         </button>
         <button class="kc-menu__item" @click="openKnowledgeBase">
-          <span class="kc-menu__icon">📖</span>打开知识库
+          <span class="kc-menu__icon">K</span>
+          打开知识库
         </button>
+        <button class="kc-menu__item" @click="openSettings">
+          <span class="kc-menu__icon">G</span>
+          打开设置
+        </button>
+        <div v-if="showModelTip" class="kc-menu__tip">
+          <div class="kc-menu__tip-title">还没有可用模型</div>
+          <button class="kc-menu__tip-link" @click="openSettings">
+            前往设置页配置 DeepSeek 模型
+          </button>
+        </div>
       </div>
     </Transition>
 
-    <!-- 深度保存面板 -->
     <Transition name="kc-panel">
-      <div v-if="panelOpen" class="kc-panel">
+      <div
+        v-if="panelOpen"
+        class="kc-panel"
+        :class="`kc-panel--${resolvedSide}`">
         <div class="kc-panel__header">
           <div class="kc-panel__title">深度保存</div>
-          <button class="kc-panel__close" @click="closePanel">✕</button>
+          <button class="kc-panel__close" @click="closePanel">X</button>
         </div>
 
         <div class="kc-panel__body">
@@ -95,26 +121,28 @@
         <div class="kc-panel__footer">
           <button
             class="kc-btn kc-btn--secondary"
-            @click="regenAi"
-            :disabled="isAiRunning">
-            {{ isAiRunning ? "生成中…" : "重新生成" }}
+            :disabled="isAiRunning"
+            @click="regenAi">
+            {{ isAiRunning ? "生成中..." : "重新生成" }}
           </button>
           <button
             class="kc-btn kc-btn--primary"
-            @click="confirmDeepSave"
-            :disabled="isSaving">
-            {{ isSaving ? "保存中…" : "保存到知识库" }}
+            :disabled="isSaving"
+            @click="confirmDeepSave">
+            {{ isSaving ? "保存中..." : "保存到知识库" }}
           </button>
         </div>
       </div>
     </Transition>
 
-    <!-- Toast 提示 -->
     <Transition name="kc-toast">
       <div
         v-if="toastMsg"
         class="kc-toast"
-        :class="{ 'kc-toast--error': toastError }">
+        :class="[
+          `kc-toast--${resolvedSide}`,
+          { 'kc-toast--error': toastError }
+        ]">
         {{ toastMsg }}
       </div>
     </Transition>
@@ -122,10 +150,34 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from "vue"
+import { computed, onMounted, onUnmounted, ref } from "vue"
 
+import type { SmartFavoritesSettings } from "../sdk/types"
 import { KNOWLEDGE_CATEGORIES } from "../types/knowledge"
 import floatingBallIconUrl from "./icon.png"
+
+type FloatingSide = "left" | "right"
+type FloatingAnchor = {
+  side: FloatingSide
+  top: number
+}
+
+type DragSession = {
+  offsetX: number
+  offsetY: number
+  moved: boolean
+}
+
+type ProviderCandidate = {
+  apiKey?: string
+  baseUrl?: string
+  model?: string
+}
+
+const FLOATING_ANCHOR_KEY = "bookmarks-collector/floating-anchor"
+const BALL_SIZE = 40
+const EDGE_GAP = 12
+const DRAG_THRESHOLD = 4
 
 const hidden = ref(false)
 const menuOpen = ref(false)
@@ -138,6 +190,13 @@ const toastMsg = ref("")
 const toastError = ref(false)
 const aiStatus = ref("")
 const aiError = ref(false)
+const hasConfiguredModel = ref(true)
+const modelStatusLoaded = ref(false)
+const ballRef = ref<HTMLElement | null>(null)
+const anchor = ref<FloatingAnchor>(createDefaultAnchor())
+const dragLeft = ref(0)
+const dragTop = ref(0)
+const isDragging = ref(false)
 
 const editTitle = ref("")
 const editSummary = ref("")
@@ -145,55 +204,248 @@ const editTagsStr = ref("")
 const editCategory = ref("其他")
 
 const categories = KNOWLEDGE_CATEGORIES
-
 const selectionText = ref("")
-let menuCloseTimer: number | undefined
 
-// 监听文字选中
+let menuCloseTimer: number | undefined
+let dragSession: DragSession | null = null
+let justDragged = false
+
+const resolvedSide = computed<FloatingSide>(() => anchor.value.side)
+const showModelTip = computed(
+  () => modelStatusLoaded.value && !hasConfiguredModel.value
+)
+const rootStyle = computed(() => {
+  if (isDragging.value) {
+    return {
+      top: `${dragTop.value}px`,
+      left: `${dragLeft.value}px`
+    }
+  }
+
+  return anchor.value.side === "left"
+    ? {
+        top: `${anchor.value.top}px`,
+        left: `${EDGE_GAP}px`
+      }
+    : {
+        top: `${anchor.value.top}px`,
+        right: `${EDGE_GAP}px`
+      }
+})
+
+function createDefaultAnchor(): FloatingAnchor {
+  const top = clampTop(Math.round(window.innerHeight * 0.22))
+  return {
+    side: "right",
+    top
+  }
+}
+
+function clampTop(value: number) {
+  const maxTop = Math.max(EDGE_GAP, window.innerHeight - BALL_SIZE - EDGE_GAP)
+  return Math.min(Math.max(value, EDGE_GAP), maxTop)
+}
+
+function clampLeft(value: number) {
+  const maxLeft = Math.max(EDGE_GAP, window.innerWidth - BALL_SIZE - EDGE_GAP)
+  return Math.min(Math.max(value, EDGE_GAP), maxLeft)
+}
+
+function hasCompleteProviderConfig(provider?: ProviderCandidate | null) {
+  return Boolean(
+    provider?.apiKey?.trim() &&
+      provider?.baseUrl?.trim() &&
+      provider?.model?.trim()
+  )
+}
+
 function onSelectionChange() {
   const text = window.getSelection()?.toString().trim() ?? ""
   selectionText.value = text
   hasSelection.value = text.length > 0
 }
 
-onMounted(() => {
-  document.addEventListener("selectionchange", onSelectionChange)
-})
-
-onUnmounted(() => {
-  document.removeEventListener("selectionchange", onSelectionChange)
-  if (menuCloseTimer) {
-    window.clearTimeout(menuCloseTimer)
+async function sendMessage<T>(type: string, payload?: unknown): Promise<T> {
+  const response = await chrome.runtime.sendMessage({ type, payload })
+  if (!response?.ok) {
+    throw new Error(response?.error ?? "操作失败")
   }
-})
+  return response.payload as T
+}
 
-function handleBallClick() {
-  if (menuOpen.value) {
-    menuOpen.value = false
-  } else {
-    quickSave()
+async function loadAnchor() {
+  const stored = await chrome.storage.local.get(FLOATING_ANCHOR_KEY)
+  const next = stored[FLOATING_ANCHOR_KEY] as Partial<FloatingAnchor> | undefined
+
+  if (next?.side !== "left" && next?.side !== "right") {
+    anchor.value = createDefaultAnchor()
+    return
+  }
+
+  anchor.value = {
+    side: next.side,
+    top: clampTop(Number(next.top) || createDefaultAnchor().top)
   }
 }
 
+async function persistAnchor() {
+  await chrome.storage.local.set({
+    [FLOATING_ANCHOR_KEY]: anchor.value
+  })
+}
+
+async function refreshModelAvailability() {
+  try {
+    const settings = await sendMessage<SmartFavoritesSettings>(
+      "bookmarks-collector/get-settings"
+    )
+    const providers = settings.providers?.length
+      ? settings.providers
+      : [settings.provider]
+
+    hasConfiguredModel.value = providers.some((provider) =>
+      hasCompleteProviderConfig(provider)
+    )
+  } catch {
+    hasConfiguredModel.value = false
+  } finally {
+    modelStatusLoaded.value = true
+  }
+}
+
+function showToast(msg: string, isError = false, duration = 3000) {
+  toastMsg.value = msg
+  toastError.value = isError
+  window.setTimeout(() => {
+    toastMsg.value = ""
+  }, duration)
+}
+
+function closeMenu() {
+  menuOpen.value = false
+}
+
 function openMenu() {
+  if (isDragging.value || justDragged) {
+    return
+  }
+
   if (menuCloseTimer) {
     window.clearTimeout(menuCloseTimer)
     menuCloseTimer = undefined
   }
+
   menuOpen.value = true
+  void refreshModelAvailability()
 }
 
 function scheduleCloseMenu() {
+  if (isDragging.value) {
+    return
+  }
+
   if (menuCloseTimer) {
     window.clearTimeout(menuCloseTimer)
   }
+
   menuCloseTimer = window.setTimeout(() => {
     menuOpen.value = false
   }, 120)
 }
 
-function closeMenu() {
-  menuOpen.value = false
+function handleBallClick() {
+  if (justDragged) {
+    justDragged = false
+    return
+  }
+
+  if (menuOpen.value) {
+    menuOpen.value = false
+    return
+  }
+
+  void quickSave()
+}
+
+function clearDragListeners() {
+  document.removeEventListener("mousemove", handleDragMove, true)
+  document.removeEventListener("mouseup", handleDragEnd, true)
+}
+
+function handleBallMouseDown(event: MouseEvent) {
+  if (event.button !== 0 || !ballRef.value) {
+    return
+  }
+
+  const rect = ballRef.value.getBoundingClientRect()
+  dragSession = {
+    offsetX: event.clientX - rect.left,
+    offsetY: event.clientY - rect.top,
+    moved: false
+  }
+  dragLeft.value = rect.left
+  dragTop.value = rect.top
+  isDragging.value = false
+  closeMenu()
+
+  document.addEventListener("mousemove", handleDragMove, true)
+  document.addEventListener("mouseup", handleDragEnd, true)
+}
+
+function handleDragMove(event: MouseEvent) {
+  if (!dragSession) {
+    return
+  }
+
+  const nextLeft = clampLeft(event.clientX - dragSession.offsetX)
+  const nextTop = clampTop(event.clientY - dragSession.offsetY)
+
+  if (
+    !dragSession.moved &&
+    (Math.abs(nextLeft - dragLeft.value) > DRAG_THRESHOLD ||
+      Math.abs(nextTop - dragTop.value) > DRAG_THRESHOLD)
+  ) {
+    dragSession.moved = true
+  }
+
+  dragLeft.value = nextLeft
+  dragTop.value = nextTop
+  isDragging.value = dragSession.moved
+}
+
+function handleDragEnd() {
+  if (!dragSession) {
+    return
+  }
+
+  const moved = dragSession.moved
+  const snappedSide: FloatingSide =
+    dragLeft.value + BALL_SIZE / 2 < window.innerWidth / 2 ? "left" : "right"
+
+  anchor.value = {
+    side: snappedSide,
+    top: clampTop(dragTop.value)
+  }
+
+  clearDragListeners()
+  dragSession = null
+  isDragging.value = false
+  void persistAnchor()
+
+  if (moved) {
+    justDragged = true
+    window.setTimeout(() => {
+      justDragged = false
+    }, 0)
+  }
+}
+
+function handleResize() {
+  anchor.value = {
+    ...anchor.value,
+    top: clampTop(anchor.value.top)
+  }
+  void persistAnchor()
 }
 
 function openCaptureSidebar() {
@@ -210,39 +462,29 @@ function closePanel() {
   panelOpen.value = false
 }
 
-async function sendMessage<T>(type: string, payload?: unknown): Promise<T> {
-  const response = await chrome.runtime.sendMessage({ type, payload })
-  if (!response?.ok) {
-    throw new Error(response?.error ?? "操作失败")
-  }
-  return response.payload as T
-}
-
-function showToast(msg: string, isError = false, duration = 3000) {
-  toastMsg.value = msg
-  toastError.value = isError
-  setTimeout(() => {
-    toastMsg.value = ""
-  }, duration)
-}
-
 async function quickSave() {
   closeMenu()
-  if (isSaving.value) return
+  if (isSaving.value) {
+    return
+  }
+
   isSaving.value = true
 
   try {
-    showToast("正在抓取网页…")
+    showToast("正在抓取网页...")
     await sendMessage("knowledge/quick-save", {
       sourceType: "page"
     })
     saveSuccess.value = true
-    showToast("✓ 已保存到知识库")
-    setTimeout(() => {
+    showToast("已保存到知识库")
+    window.setTimeout(() => {
       saveSuccess.value = false
     }, 3000)
-  } catch (e) {
-    showToast(e instanceof Error ? e.message : "保存失败，请重试", true)
+  } catch (error) {
+    showToast(
+      error instanceof Error ? error.message : "保存失败，请重试",
+      true
+    )
   } finally {
     isSaving.value = false
   }
@@ -254,12 +496,11 @@ async function deepSave() {
   editSummary.value = ""
   editTagsStr.value = ""
   editCategory.value = "其他"
-  aiStatus.value = "正在生成 AI 摘要…"
+  aiStatus.value = "正在生成 AI 摘要..."
   aiError.value = false
   panelOpen.value = true
-
-  // 异步请求 AI 元数据
   isAiRunning.value = true
+
   try {
     const result = await sendMessage<{
       summary: string
@@ -270,8 +511,9 @@ async function deepSave() {
     editTagsStr.value = result.tags.join(", ")
     editCategory.value = result.category
     aiStatus.value = ""
-  } catch (e) {
-    aiStatus.value = e instanceof Error ? e.message : "AI 生成失败，可手动填写"
+  } catch (error) {
+    aiStatus.value =
+      error instanceof Error ? error.message : "AI 生成失败，可手动填写"
     aiError.value = true
   } finally {
     isAiRunning.value = false
@@ -279,10 +521,14 @@ async function deepSave() {
 }
 
 async function regenAi() {
-  if (isAiRunning.value) return
-  aiStatus.value = "正在重新生成…"
+  if (isAiRunning.value) {
+    return
+  }
+
+  aiStatus.value = "正在重新生成..."
   aiError.value = false
   isAiRunning.value = true
+
   try {
     const result = await sendMessage<{
       summary: string
@@ -293,8 +539,8 @@ async function regenAi() {
     editTagsStr.value = result.tags.join(", ")
     editCategory.value = result.category
     aiStatus.value = ""
-  } catch (e) {
-    aiStatus.value = e instanceof Error ? e.message : "AI 生成失败"
+  } catch (error) {
+    aiStatus.value = error instanceof Error ? error.message : "AI 生成失败"
     aiError.value = true
   } finally {
     isAiRunning.value = false
@@ -302,12 +548,16 @@ async function regenAi() {
 }
 
 async function confirmDeepSave() {
-  if (isSaving.value) return
+  if (isSaving.value) {
+    return
+  }
+
   isSaving.value = true
+
   try {
     const tags = editTagsStr.value
       .split(",")
-      .map((t) => t.trim())
+      .map((tag) => tag.trim())
       .filter(Boolean)
 
     await sendMessage("knowledge/save-with-meta", {
@@ -318,9 +568,9 @@ async function confirmDeepSave() {
       sourceType: "page"
     })
     panelOpen.value = false
-    showToast("✓ 已保存到知识库")
-  } catch (e) {
-    showToast(e instanceof Error ? e.message : "保存失败", true)
+    showToast("已保存到知识库")
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : "保存失败", true)
   } finally {
     isSaving.value = false
   }
@@ -328,18 +578,20 @@ async function confirmDeepSave() {
 
 async function saveSelection() {
   closeMenu()
+
   if (!selectionText.value) {
-    showToast("请先在页面上选中一段文字", true)
+    showToast("请先在页面上选中一段文本", true)
     return
   }
+
   isSaving.value = true
   try {
     await sendMessage("knowledge/save-selection", {
       selectedText: selectionText.value
     })
-    showToast("✓ 选中内容已保存")
-  } catch (e) {
-    showToast(e instanceof Error ? e.message : "保存失败", true)
+    showToast("选中文本已保存")
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : "保存失败", true)
   } finally {
     isSaving.value = false
   }
@@ -349,19 +601,47 @@ function openKnowledgeBase() {
   closeMenu()
   chrome.runtime.sendMessage({ type: "knowledge/open-knowledge-base" })
 }
+
+async function openSettings() {
+  closeMenu()
+  await sendMessage("bookmarks-collector/open-extension-page", {
+    path: "tabs/manage.html#settings"
+  })
+}
+
+onMounted(() => {
+  document.addEventListener("selectionchange", onSelectionChange)
+  window.addEventListener("resize", handleResize)
+  void loadAnchor()
+  void refreshModelAvailability()
+  onSelectionChange()
+})
+
+onUnmounted(() => {
+  document.removeEventListener("selectionchange", onSelectionChange)
+  window.removeEventListener("resize", handleResize)
+  clearDragListeners()
+
+  if (menuCloseTimer) {
+    window.clearTimeout(menuCloseTimer)
+  }
+})
 </script>
 
 <style scoped>
 .kc-float-root {
   position: fixed;
-  right: 20px;
-  bottom: 20px;
   z-index: 2147483640;
-  font-family: -apple-system, "PingFang SC", "Hiragino Sans GB", sans-serif;
+  width: 40px;
+  height: 40px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-size: 13px;
 }
 
-/* Ball — ink stamp feel */
+.kc-float-root--dragging {
+  transition: none;
+}
+
 .kc-ball {
   width: 40px;
   height: 40px;
@@ -372,13 +652,19 @@ function openKnowledgeBase() {
   display: flex;
   align-items: center;
   justify-content: center;
-  cursor: pointer;
+  cursor: grab;
   box-shadow: 0 2px 10px rgba(27, 27, 34, 0.22);
   transition:
     transform 0.18s,
     box-shadow 0.18s,
     background 0.18s;
   user-select: none;
+}
+
+.kc-float-root--dragging .kc-ball {
+  cursor: grabbing;
+  transform: scale(1.05);
+  box-shadow: 0 8px 24px rgba(27, 27, 34, 0.22);
 }
 
 .kc-ball:hover {
@@ -396,7 +682,7 @@ function openKnowledgeBase() {
 }
 
 .kc-ball__icon {
-  font-size: 16px;
+  font-size: 13px;
   line-height: 1;
 }
 
@@ -407,18 +693,24 @@ function openKnowledgeBase() {
   display: block;
 }
 
-/* Context menu — clean paper popup */
 .kc-menu {
   position: absolute;
-  right: 48px;
-  bottom: 0;
+  top: 0;
+  min-width: 172px;
   background: #fff;
   border: 1px solid rgba(27, 27, 34, 0.1);
   border-radius: 8px;
   box-shadow: 0 4px 20px rgba(27, 27, 34, 0.12);
   padding: 4px 0;
-  min-width: 152px;
   overflow: hidden;
+}
+
+.kc-menu--right {
+  right: 48px;
+}
+
+.kc-menu--left {
+  left: 48px;
 }
 
 .kc-menu__item {
@@ -447,20 +739,44 @@ function openKnowledgeBase() {
 }
 
 .kc-menu__icon {
-  font-size: 13px;
   width: 16px;
-  text-align: center;
   flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+  color: #6b6870;
 }
 
-/* Deep save panel — compact notebook sidebar */
+.kc-menu__tip {
+  border-top: 1px solid rgba(27, 27, 34, 0.08);
+  padding: 10px 13px 12px;
+  background: #fcfaf4;
+}
+
+.kc-menu__tip-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #7a5a18;
+}
+
+.kc-menu__tip-link {
+  margin-top: 6px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: #3960a8;
+  font-size: 12px;
+  cursor: pointer;
+  text-decoration: underline;
+  font-family: inherit;
+}
+
 .kc-panel {
   position: fixed;
-  right: 20px;
   top: 50%;
-  transform: translateY(-50%);
   width: 340px;
   max-height: 80vh;
+  transform: translateY(-50%);
   background: #fff;
   border: 1px solid rgba(27, 27, 34, 0.1);
   border-radius: 10px;
@@ -468,6 +784,14 @@ function openKnowledgeBase() {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+.kc-panel--right {
+  right: 20px;
+}
+
+.kc-panel--left {
+  left: 20px;
 }
 
 .kc-panel__header {
@@ -483,16 +807,15 @@ function openKnowledgeBase() {
   font-size: 14px;
   font-weight: 600;
   color: #1b1b22;
-  letter-spacing: -0.01em;
 }
 
 .kc-panel__close {
   background: none;
   border: none;
-  font-size: 14px;
+  font-size: 12px;
   color: #aeadb8;
   cursor: pointer;
-  padding: 2px 6px;
+  padding: 4px 6px;
   border-radius: 4px;
   transition:
     color 0.12s,
@@ -604,11 +927,9 @@ function openKnowledgeBase() {
   background: #f5f4f0;
 }
 
-/* Toast notification */
 .kc-toast {
   position: absolute;
-  bottom: 50px;
-  right: 0;
+  top: 48px;
   background: #1b1b22;
   color: #fff;
   font-size: 12px;
@@ -618,21 +939,29 @@ function openKnowledgeBase() {
   box-shadow: 0 2px 10px rgba(27, 27, 34, 0.2);
 }
 
+.kc-toast--right {
+  right: 0;
+}
+
+.kc-toast--left {
+  left: 0;
+}
+
 .kc-toast--error {
   background: #b03a2e;
 }
 
-/* Transitions */
 .kc-menu-enter-active,
 .kc-menu-leave-active {
   transition:
     opacity 0.15s,
     transform 0.15s;
 }
+
 .kc-menu-enter-from,
 .kc-menu-leave-to {
   opacity: 0;
-  transform: translateX(8px);
+  transform: translateY(6px);
 }
 
 .kc-panel-enter-active,
@@ -641,10 +970,11 @@ function openKnowledgeBase() {
     opacity 0.2s,
     transform 0.2s;
 }
+
 .kc-panel-enter-from,
 .kc-panel-leave-to {
   opacity: 0;
-  transform: translateY(-50%) translateX(20px);
+  transform: translateY(-50%) translateX(12px);
 }
 
 .kc-toast-enter-active,
@@ -653,6 +983,7 @@ function openKnowledgeBase() {
     opacity 0.2s,
     transform 0.2s;
 }
+
 .kc-toast-enter-from,
 .kc-toast-leave-to {
   opacity: 0;

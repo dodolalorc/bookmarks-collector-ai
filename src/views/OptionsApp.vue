@@ -3,6 +3,9 @@ import { computed, onMounted, ref } from "vue"
 
 import { SmartFavoritesSDK } from "../sdk/client"
 import {
+  DEFAULT_PROVIDER_BASE_URL,
+  DEFAULT_PROVIDER_LABEL,
+  DEFAULT_PROVIDER_MODEL,
   DEFAULT_PROMPT_TEMPLATE,
   DEFAULT_SYSTEM_PROMPT
 } from "../sdk/constants"
@@ -446,10 +449,13 @@ const addProvider = () => {
 
   const nextProvider: AiModelProfile = {
     id: `provider-${Date.now()}`,
-    label: `模型 ${settings.value.providers.length + 1}`,
-    baseUrl: "https://api.openai.com/v1",
+    label:
+      settings.value.providers.length === 0
+        ? DEFAULT_PROVIDER_LABEL
+        : `DeepSeek 模型 ${settings.value.providers.length + 1}`,
+    baseUrl: DEFAULT_PROVIDER_BASE_URL,
     apiKey: "",
-    model: ""
+    model: DEFAULT_PROVIDER_MODEL
   }
 
   updateSettings(
@@ -782,7 +788,7 @@ const distributionStyle = (ratio: number) => ({
           <SectionHeader
             compact
             title="AI Models"
-            subtitle="支持配置多个 OpenAI 兼容模型，并同步给网页 AI 面板使用。" />
+            subtitle="默认预置 DeepSeek，也支持配置多个兼容模型，并同步给网页 AI 面板使用。" />
           <BaseButton variant="accent" @click="addProvider">
             <font-awesome-icon icon="plus" />
             添加模型
